@@ -14,7 +14,10 @@
 [CmdletBinding()]
 param(
     [string] $MediaMtxVersion = 'v1.9.3',
-    [switch] $SkipBinaries
+    [switch] $SkipBinaries,
+    # Override Python autodetection, e.g.
+    #   .\setup.ps1 -PythonExe 'C:\Python313\python.exe'
+    [string] $PythonExe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,39 +32,93 @@ function Write-Ok   { param([string] $Message) Write-Host "    $Message" -Foregr
 function Write-Warn { param([string] $Message) Write-Host "    $Message" -ForegroundColor Yellow }
 
 # --- Python ---------------------------------------------------------------
+# Detection notes, learned the hard way:
+#   * $args cannot be assigned in a [CmdletBinding()] script -- it is not set,
+#     and referencing it throws.
+#   * $parts[1..($parts.Length-1)] on a one-element array indexes out of
+#     bounds, which Set-StrictMode turns into a terminating error.
+#   * Double quotes inside a `python -c` argument are mangled by PowerShell's
+#     native-argument passing, so `--version` is used instead: nothing to quote.
 Write-Step 'Checking for Python 3.12 or newer'
 
-$python = $null
-foreach ($candidate in @('py -3.12', 'py -3', 'python')) {
-    $parts = $candidate.Split(' ')
-    $exe = $parts[0]
-    if (-not (Get-Command $exe -ErrorAction SilentlyContinue)) { continue }
+function Get-PythonCandidate {
+    param([string] $Exe, [string[]] $Prefix = @())
+
+    if (-not (Get-Command $Exe -ErrorAction SilentlyContinue)) { return $null }
+    $cmdArgs = @($Prefix) + @('--version')
     try {
-        $args = @($parts[1..($parts.Length - 1)]) + @('-c', 'import sys; print("%d.%d" % sys.version_info[:2])')
-        $version = & $exe @args 2>$null
-    } catch { continue }
-    if ($LASTEXITCODE -ne 0 -or -not $version) { continue }
-    $parsed = [version]("$version".Trim())
-    if ($parsed -ge [version]'3.12') {
-        $python = $candidate
-        Write-Ok "Using $candidate (Python $version)"
-        break
+        $out = (& $Exe @cmdArgs 2>&1 | Out-String)
+    } catch {
+        return $null
+    }
+    if ($out -match 'Python\s+(\d+)\.(\d+)') {
+        return [pscustomobject]@{
+            Exe     = $Exe
+            Prefix  = $Prefix
+            Label   = ((@($Exe) + $Prefix) -join ' ')
+            Version = [version]("{0}.{1}" -f $Matches[1], $Matches[2])
+            Raw     = $out.Trim()
+        }
+    }
+    return $null
+}
+
+$minVersion = [version]'3.12'
+$python = $null
+$tried = @()
+
+if ($PythonExe) {
+    $python = Get-PythonCandidate -Exe $PythonExe
+    if (-not $python) {
+        Write-Host "The -PythonExe you gave could not be run: $PythonExe" -ForegroundColor Red
+        exit 1
+    }
+    if ($python.Version -lt $minVersion) {
+        Write-Host "$PythonExe is Python $($python.Version); 3.12 or newer is required." -ForegroundColor Red
+        exit 1
+    }
+} else {
+    foreach ($candidate in @(
+        @{ Exe = 'py';      Prefix = @('-3') },
+        @{ Exe = 'py';      Prefix = @()     },
+        @{ Exe = 'python';  Prefix = @()     },
+        @{ Exe = 'python3'; Prefix = @()     }
+    )) {
+        $found = Get-PythonCandidate -Exe $candidate.Exe -Prefix $candidate.Prefix
+        $label = ((@($candidate.Exe) + $candidate.Prefix) -join ' ')
+        if (-not $found) {
+            $tried += "  $label -> not found, or did not report a version"
+            continue
+        }
+        $tried += "  $label -> $($found.Raw)"
+        if ($found.Version -ge $minVersion) { $python = $found; break }
     }
 }
 
 if (-not $python) {
     Write-Host ''
-    Write-Host 'Python 3.12 or newer was not found.' -ForegroundColor Red
-    Write-Host 'Install it from https://www.python.org/downloads/windows/ and'
-    Write-Host 'tick "Add python.exe to PATH" during installation, then re-run this script.'
+    Write-Host 'No Python 3.12 or newer was found.' -ForegroundColor Red
+    Write-Host ''
+    if ($tried.Count -gt 0) {
+        Write-Host 'What was tried:'
+        $tried | ForEach-Object { Write-Host $_ }
+        Write-Host ''
+    }
+    Write-Host 'Install it from https://www.python.org/downloads/windows/ and tick'
+    Write-Host '"Add python.exe to PATH", then re-run this script.'
+    Write-Host ''
+    Write-Host 'If Python is installed somewhere this did not look, point at it directly:'
+    Write-Host "    .\setup.ps1 -PythonExe 'C:\Path\To\python.exe'"
     exit 1
 }
+
+Write-Ok "Using $($python.Label) ($($python.Raw))"
 
 # --- venv -----------------------------------------------------------------
 Write-Step 'Creating the local virtual environment'
 if (-not (Test-Path (Join-Path $VenvDir 'Scripts\python.exe'))) {
-    $parts = $python.Split(' ')
-    & $parts[0] @($parts[1..($parts.Length - 1)]) -m venv $VenvDir
+    $venvArgs = @($python.Prefix) + @('-m', 'venv', $VenvDir)
+    & $python.Exe @venvArgs
     if ($LASTEXITCODE -ne 0) { throw 'Failed to create the virtual environment.' }
     Write-Ok "Created $VenvDir"
 } else {
