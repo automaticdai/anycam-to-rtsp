@@ -196,8 +196,26 @@ try {
 # --- codec check ----------------------------------------------------------
 Write-Step 'Checking which hardware codecs this ffmpeg build has'
 $ffmpeg = Join-Path $BinDir 'ffmpeg.exe'
-$encoders = & $ffmpeg -hide_banner -encoders 2>&1 | Out-String
-$decoders = & $ffmpeg -hide_banner -decoders 2>&1 | Out-String
+
+# Capture via an OS-level redirect rather than `2>&1`: merged stderr becomes
+# ErrorRecords, which terminate under $ErrorActionPreference='Stop'.
+function Invoke-FfmpegQuery {
+    param([string] $Flag)
+    $o = [System.IO.Path]::GetTempFileName()
+    $e = [System.IO.Path]::GetTempFileName()
+    try {
+        Start-Process -FilePath $ffmpeg -ArgumentList '-hide_banner', $Flag `
+                      -NoNewWindow -Wait `
+                      -RedirectStandardOutput $o -RedirectStandardError $e | Out-Null
+        return ((Get-Content -LiteralPath $o -ErrorAction SilentlyContinue) +
+                (Get-Content -LiteralPath $e -ErrorAction SilentlyContinue)) -join "`n"
+    } finally {
+        Remove-Item -LiteralPath $o, $e -Force -ErrorAction SilentlyContinue
+    }
+}
+
+$encoders = Invoke-FfmpegQuery -Flag '-encoders'
+$decoders = Invoke-FfmpegQuery -Flag '-decoders'
 
 if ($encoders -match 'h264_nvenc') {
     Write-Ok 'h264_nvenc present (NVIDIA hardware encoding available)'

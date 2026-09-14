@@ -249,7 +249,8 @@ and software decode, validating protocol and supervision logic without a GPU.
 
 **Bench verification** (written checklist, not automated): DirectShow
 enumeration quirks (duplicate device names, non-ASCII names, and the misleading
-non-zero exit code from `-list_devices`), NVENC/NVDEC on real hardware, the
+exit code from `-list_devices`, which varies by build), NVENC/NVDEC on real
+hardware, the
 four-camera USB bandwidth ceiling, unplug/replug recovery, latency calibration.
 
 ## Configuration

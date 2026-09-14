@@ -19,8 +19,9 @@ No protocol choice fixes it.
 ## 2. DirectShow enumeration
 
 - [ ] `anycam devices` lists every camera
-- [ ] Note that ffmpeg exits non-zero here **by design** and prints to stderr;
-      this is not a failure
+- [ ] Note that ffmpeg prints the list to **stderr**, and may exit zero or
+      non-zero depending on the build (measured: ffmpeg 7.x exits 0, older
+      builds exit 1). Neither is a failure
 - [ ] Check for duplicate device names — two identical cameras report the same
       string, and the config cannot distinguish them by name alone
 - [ ] Check for non-ASCII characters in device names

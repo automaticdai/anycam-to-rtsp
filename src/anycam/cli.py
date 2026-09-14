@@ -48,8 +48,9 @@ def _watch(args: argparse.Namespace) -> int:
 def _devices(args: argparse.Namespace) -> int:
     """List DirectShow devices.
 
-    ffmpeg exits non-zero here by design and prints the list to stderr; that
-    is not a failure and must not be reported as one.
+    ffmpeg prints the list to stderr, and depending on the build may exit
+    zero or non-zero. Neither is a failure and neither is reported as one --
+    measured: ffmpeg 7.x exits 0 here, older builds exit 1.
     """
     proc = subprocess.run(
         [args.ffmpeg, "-hide_banner", "-list_devices", "true",
