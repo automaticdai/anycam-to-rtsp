@@ -27,7 +27,12 @@ def build_capture_command(camera: CameraConfig, rtsp_url: str, *,
             argv += ["-vcodec", "mjpeg"]
         argv += ["-i", f"video={s.device}"]
     elif s.type == "lavfi":
-        argv += ["-f", "lavfi",
+        # -re paces generation to wallclock rate. Without it lavfi generates
+        # testsrc2 as fast as the encoder can run (measured: 308.7fps
+        # against a configured 30), which is only correct for a synthetic
+        # source used in tests -- dshow must never get this flag, since
+        # real hardware already paces the stream itself.
+        argv += ["-re", "-f", "lavfi",
                  "-i", f"testsrc2=size={v.width}x{v.height}:rate={v.fps}"]
     else:
         raise ValueError(f"unsupported source type {s.type!r}")
@@ -66,8 +71,12 @@ def command_string(argv: list[str]) -> str:
         # Escape backslashes first, then quotes (go-shellquote's escape rules)
         escaped = arg.replace('\\', '\\\\').replace('"', '\\"')
 
-        # Quote if it contains spaces or special characters
-        if " " in arg or escaped != arg:
+        # Quote if it contains spaces, special characters, or an apostrophe.
+        # go-shellquote treats a bare `'` as a quote character in an
+        # unquoted word, so an unquoted apostrophe is silently mis-parsed
+        # (confirmed against real MediaMTX v1.9.3: the path never started
+        # and nothing matching "error" was logged, even at logLevel: debug).
+        if " " in arg or "'" in arg or escaped != arg:
             result.append(f'"{escaped}"')
         else:
             result.append(arg)

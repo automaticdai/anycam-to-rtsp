@@ -92,6 +92,26 @@ def test_lavfi_source_builds_synthetic_input():
     assert "dshow" not in argv
 
 
+def test_lavfi_source_paces_generation_at_native_rate():
+    """Without `-re`, lavfi generates testsrc2 as fast as the encoder can
+    run (measured: 308.7 fps against a configured 30), which makes the
+    whole integration tier exercise timing at ~10x. `-re` must appear
+    before the lavfi input so ffmpeg paces frames to wallclock rate."""
+    cam = CameraConfig(id="cam0", source=SourceConfig(type="lavfi"),
+                       video=VideoConfig(1920, 1080, 30),
+                       encode=EncodeConfig(codec="libx264",
+                                           preset="ultrafast",
+                                           tune="zerolatency"))
+    argv = build_capture_command(cam, URL)
+    assert "-re" in argv
+    assert argv.index("-re") < argv.index("-i")
+
+
+def test_dshow_source_omits_re_since_hardware_paces_the_stream():
+    argv = build_capture_command(dshow_cam(), URL)
+    assert "-re" not in argv
+
+
 def test_unknown_source_type_raises():
     cam = CameraConfig(id="cam0", source=SourceConfig(type="telepathy"),
                        video=VideoConfig(), encode=EncodeConfig())
@@ -166,6 +186,37 @@ def test_command_string_allows_ampersand_in_quoted_argument():
     cmd = command_string(argv)
     # Should contain the device string safely quoted with & intact
     assert '"video=Cam & Device"' in cmd
+
+
+def test_command_string_quotes_device_names_containing_an_apostrophe():
+    """go-shellquote treats a bare `'` as a quote character in an unquoted
+    word, so an unquoted apostrophe silently truncates or mis-parses the
+    argument (verified against real MediaMTX v1.9.3: the path never started
+    and nothing matching "error" was logged, even at logLevel: debug)."""
+    cam = CameraConfig(
+        id="cam0",
+        source=SourceConfig(type="dshow", device="Bob'sCam"),
+        video=VideoConfig(1920, 1080, 30),
+        encode=EncodeConfig(),
+    )
+    argv = build_capture_command(cam, URL)
+    cmd = command_string(argv)
+
+    import shlex
+    parsed = shlex.split(cmd)
+    assert "video=Bob'sCam" in parsed
+
+
+def test_command_string_leaves_a_plain_argument_unquoted():
+    """A plain argument (no spaces, quotes, backslashes or apostrophes) must
+    be emitted bare -- this was previously unasserted, which is what let the
+    apostrophe-quoting gap hide."""
+    argv = build_capture_command(dshow_cam(), URL)
+    cmd = command_string(argv)
+    assert " dshow " in f" {cmd} "
+    parts = cmd.split(" ")
+    assert "dshow" in parts
+    assert '"dshow"' not in parts
 
 
 def test_dshow_device_none_raises_clear_error():
