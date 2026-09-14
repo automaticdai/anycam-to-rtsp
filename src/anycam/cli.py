@@ -92,3 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     except (ConfigError, HostDiscoveryError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised via `python -m`
+    raise SystemExit(main())

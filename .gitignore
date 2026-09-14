@@ -7,3 +7,4 @@ __pycache__/
 /mediamtx.yml
 /calibration/
 /config.yaml
+dist/

@@ -92,3 +92,26 @@ def test_serve_config_creates_output_directory(tmp_path):
 
     doc = yaml.safe_load(out.read_text())
     assert "cam0" in doc["paths"]
+
+
+def test_module_invocation_runs_main_and_propagates_exit_code(tmp_path):
+    """`python -m anycam.cli` must actually run, not silently no-op.
+
+    Without a __main__ guard the module is imported, defines its functions and
+    exits 0 regardless of arguments — so a failing config would look like a
+    success to any script driving it (the Windows generate.ps1 does exactly
+    that).
+    """
+    import subprocess
+    import sys
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("cameras: []\n")
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "anycam.cli", "serve-config",
+         "-c", str(cfg), "-o", str(tmp_path / "m.yml")],
+        capture_output=True, text=True)
+
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert "at least one camera" in proc.stderr
