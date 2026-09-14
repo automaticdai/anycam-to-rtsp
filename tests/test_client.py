@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 
@@ -144,3 +145,79 @@ def test_stop_is_idempotent():
     client.start()
     client.stop()
     client.stop()
+
+
+def test_monitor_reconnects_only_the_wedged_camera_among_healthy_peers():
+    """Isolation claim: force-reconnecting one wedged camera must not touch
+    its healthy peers, whose reconnect counts must stay unchanged throughout
+    and which must keep delivering fresh frames the whole time."""
+    cfg = app_config(3)
+    cfg = AppConfig(server=cfg.server, cameras=cfg.cameras,
+                    client=ClientConfig(watchdog_timeout_s=0.2))
+
+    def opener(url, options):
+        if url.endswith("cam1"):
+            return FakeContainer(stall_after=2)
+        return FakeContainer()
+
+    with MultiCameraClient(cfg, host="h", opener=opener,
+                           monitor_interval_s=0.02) as client:
+        assert wait_for(lambda: client.latest("cam0") is not None
+                         and client.latest("cam2") is not None)
+
+        # Poll continuously while cam1 is expected to wedge and get
+        # force-reconnected; assert the healthy peers' reconnect counts
+        # never move during that whole window, not just at the end.
+        deadline = time.monotonic() + 3.0
+        wedge_reconnected = False
+        while time.monotonic() < deadline and not wedge_reconnected:
+            stats = client.stats()
+            assert stats["cam0"].reconnects == 0
+            assert stats["cam2"].reconnects == 0
+            wedge_reconnected = stats["cam1"].reconnects >= 1
+            time.sleep(0.01)
+        assert wedge_reconnected
+
+        # The healthy peers must still be actively delivering frames, not
+        # just untouched in their counters.
+        healthy0 = client.latest("cam0").frame_id
+        healthy2 = client.latest("cam2").frame_id
+        assert wait_for(lambda: client.latest("cam0").frame_id > healthy0)
+        assert wait_for(lambda: client.latest("cam2").frame_id > healthy2)
+
+
+def test_monitor_survives_a_per_camera_exception(caplog):
+    """One camera's monitor-loop failure must not stop supervision of the
+    rest: the monitor thread must keep running and keep servicing every
+    other camera's watchdog."""
+    cfg = app_config(2)
+    cfg = AppConfig(server=cfg.server, cameras=cfg.cameras,
+                    client=ClientConfig(watchdog_timeout_s=0.2))
+
+    def opener(url, options):
+        return FakeContainer(stall_after=2)
+
+    with MultiCameraClient(cfg, host="h", opener=opener,
+                           monitor_interval_s=0.02) as client:
+        assert wait_for(lambda: client.latest("cam0") is not None
+                         and client.latest("cam1") is not None)
+
+        # Inject a failure into cam0's monitor check only; keep everything
+        # else about the client and its receivers real.
+        broken = client._receivers["cam0"]
+
+        def boom():
+            raise RuntimeError("simulated monitor-loop failure")
+
+        broken.watchdog.expired = boom
+
+        with caplog.at_level(logging.WARNING, logger="anycam.client"):
+            # cam1 must still get force-reconnected despite cam0 raising on
+            # every single monitor tick.
+            assert wait_for(lambda: client.stats()["cam1"].reconnects >= 1,
+                            timeout=5.0)
+            assert client._monitor.is_alive()
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("cam0" in r.getMessage() for r in warnings)
+    assert any(r.exc_info for r in warnings)

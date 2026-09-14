@@ -52,10 +52,19 @@ class MultiCameraClient:
         self._stop.set()
         if self._monitor is not None:
             self._monitor.join(timeout=5.0)
+            if self._monitor.is_alive():
+                log.warning(
+                    "watchdog-monitor thread did not stop within %.1fs; it "
+                    "is still running in the background", 5.0)
             self._monitor = None
-        for rx in self._receivers.values():
-            if rx.is_alive():
-                rx.stop()
+
+        failed = [cid for cid, rx in self._receivers.items()
+                  if rx.is_alive() and not rx.stop()]
+        if failed:
+            ok = len(self._receivers) - len(failed)
+            log.warning(
+                "%d of %d cameras stopped cleanly; still running: %s",
+                ok, len(self._receivers), ", ".join(failed))
 
     def latest(self, camera_id: str) -> Frame | None:
         return self._receivers[camera_id].buffer.get()
@@ -83,14 +92,25 @@ class MultiCameraClient:
         This cannot live inside the receiver: a wedged stream is blocked
         inside a read that never returns, so only another thread can close
         the container and unblock it.
+
+        Each camera's check is wrapped independently: this loop is the one
+        place whose whole purpose is treating cameras independently, so it
+        must not let one camera's failure end supervision for every other
+        camera by killing this daemon thread.
         """
         while not self._stop.wait(self._monitor_interval_s):
             for cid, rx in self._receivers.items():
-                if rx.watchdog.expired():
-                    log.warning("%s: no frames for %.2fs, reconnecting",
-                                cid, rx.watchdog.age_s())
-                    rx.watchdog.beat()
-                    rx.force_reconnect()
+                try:
+                    if rx.watchdog.expired():
+                        log.warning("%s: no frames for %.2fs, reconnecting",
+                                    cid, rx.watchdog.age_s())
+                        rx.watchdog.beat()
+                        rx.force_reconnect()
+                except Exception:
+                    log.warning(
+                        "%s: monitor check failed; leaving this camera's "
+                        "supervision to the next tick and continuing with "
+                        "the rest", cid, exc_info=True)
 
     def __enter__(self) -> MultiCameraClient:
         self.start()
