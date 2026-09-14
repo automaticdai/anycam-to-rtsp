@@ -2,3 +2,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+# Tool outputs that land in the repo root when following the README
+/mediamtx.yml
+/calibration/
+/config.yaml
