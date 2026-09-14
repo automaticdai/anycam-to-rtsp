@@ -22,13 +22,17 @@ USB cam ──DirectShow──▶ ffmpeg ──NVENC h264──▶ MediaMTX /cam
 
 Nothing is installed system-wide. Everything lands inside this folder.
 
-## Setup
+## Quick start
 
 Open PowerShell **in this folder** and run:
 
 ```powershell
-.\setup.ps1
+.\run.ps1
 ```
+
+That is the whole thing. It sets up on first run, finds your cameras, writes
+`config.yaml` from their real names, works out which MJPEG decoder they
+actually accept, generates the server config, and starts streaming.
 
 If PowerShell refuses to run the scripts, allow them for this session only:
 
@@ -36,82 +40,11 @@ If PowerShell refuses to run the scripts, allow them for this session only:
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-`setup.ps1` creates a local virtual environment, installs the generator, and
-downloads ffmpeg and MediaMTX v1.9.3 into `bin\`. It finishes by telling you
-which hardware codecs your ffmpeg build actually has — read that output, it
-decides one of the steps below.
-
-## Running it
-
-**1. Find your cameras.**
-
-```powershell
-.\devices.ps1
-```
-
-Copy the names *exactly*, including punctuation and capitalisation. A name
-that does not match is the most common reason a camera never starts. If two
-cameras report the same name, use the `alt:` form printed underneath — the
-plain name cannot tell them apart.
-
-**2. Describe them.** Copy `config.example.yaml` to `config.yaml` and edit:
-
-```yaml
-server:
-  rtsp_port: 8554
-
-cameras:
-  - id: cam0
-    source: {type: dshow, device: "Logitech BRIO"}
-    video:  {width: 1920, height: 1080, fps: 30}
-    encode: {codec: h264_nvenc, preset: p1, tune: ull, bitrate: 8M, gop: 30}
-```
-
-`id` becomes the RTSP path (`/cam0`), so keep it to letters, digits,
-underscores and hyphens — anything else is rejected with an error.
-
-**3. Generate the server config.**
-
-```powershell
-.\generate.ps1
-```
-
-Add `-NoHwMjpeg` if `setup.ps1` told you `mjpeg_cuvid` was missing.
-
-Re-run this every time you change `config.yaml`. **Do not hand-edit
-`mediamtx.yml`.** The ffmpeg command lines inside it are escaped for
-MediaMTX's own argument parser, and an apostrophe in a device name that is
-escaped wrongly produces a camera that never starts *and logs nothing* —
-which is a miserable thing to debug.
-
-**4. Start the server.**
-
-```powershell
-.\start.ps1
-```
-
-Leave it running. Check a camera from a browser on this machine:
+Then check a camera from a browser on this machine:
 **<http://localhost:8889/cam0>**. If the picture is there, capture and
-encoding are working, and anything failing on the WSL side is networking.
+encoding work, and anything failing on the WSL side is networking.
 
-**5. Let WSL through the firewall.** In an **administrator** PowerShell:
-
-```powershell
-.\firewall.ps1
-```
-
-Better, if you can: enable mirrored networking instead. Put
-
-```ini
-[wsl2]
-networkingMode=mirrored
-```
-
-in `%USERPROFILE%\.wslconfig` and run `wsl --shutdown`. WSL then reaches the
-host on `127.0.0.1` and no firewall rule is needed at all. Requires Windows 11
-22H2 or newer.
-
-**6. Consume it.** In WSL, with the project checked out:
+To consume it, in WSL:
 
 ```bash
 anycam watch -c config.yaml
@@ -119,6 +52,60 @@ anycam watch -c config.yaml
 
 `depth=1` with `dropped` climbing is *correct* — it means you are getting the
 freshest frame rather than a backlog.
+
+### Useful flags
+
+| Command | What it does |
+|---|---|
+| `.\run.ps1 -Reconfigure` | Rebuild `config.yaml` from the cameras attached right now |
+| `.\run.ps1 -Software` | Use `libx264` instead of NVENC (no NVIDIA GPU) |
+| `.\run.ps1 -NoProbe` | Trust `config.yaml` as written; skip the decoder check |
+
+## What you need
+
+- Windows 10 or 11, 64-bit
+- **Python 3.12 or newer** — <https://www.python.org/downloads/windows/>,
+  ticking "Add python.exe to PATH". Only the config generator needs it; it
+  pulls in one small dependency (PyYAML), not the heavy video stack.
+- An NVIDIA GPU for hardware encoding. Without one, use `-Software`.
+
+Nothing is installed system-wide. Everything lands inside this folder.
+
+## The individual steps
+
+`run.ps1` just calls these in order. Run them yourself when you want control:
+
+| Script | Does |
+|---|---|
+| `.\setup.ps1` | venv, package, ffmpeg + MediaMTX into `bin\` |
+| `.\devices.ps1` | List DirectShow cameras (`-Raw` for ffmpeg's full output) |
+| `.\configure.ps1` | Write `config.yaml` from detected cameras (`-Choose` to pick) |
+| `.\generate.ps1` | Build `mediamtx.yml` (`-NoHwMjpeg` for CPU MJPEG decode) |
+| `.\start.ps1` | Run the server |
+| `.\firewall.ps1` | Allow inbound TCP 8554 (needs administrator) |
+
+Edit `config.yaml` by hand whenever you like — change resolution, frame rate,
+bitrate, or camera ids. Re-run `.\generate.ps1` afterwards. **Do not hand-edit
+`mediamtx.yml`**: the ffmpeg command lines in it are escaped for MediaMTX's own
+argument parser, and getting that wrong produces a camera that never starts and
+logs nothing.
+
+### Firewall
+
+Often not needed — test first. Under WSL2's default NAT networking, inbound
+connections on the `vEthernet (WSL)` adapter may be blocked, giving
+"connection refused" from WSL with nothing explaining why. If so, run
+`.\firewall.ps1` from an **administrator** PowerShell.
+
+Better, if you can: put
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+in `%USERPROFILE%\.wslconfig` and run `wsl --shutdown`. WSL then reaches the
+host on `127.0.0.1` and no rule is needed. Requires Windows 11 22H2 or newer.
 
 ## When it doesn't work
 

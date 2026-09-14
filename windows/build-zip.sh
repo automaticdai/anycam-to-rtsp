@@ -16,6 +16,7 @@ trap 'rm -rf "$STAGE"' EXIT
 
 mkdir -p "$STAGE/$NAME"
 cp "$ROOT"/windows/*.ps1            "$STAGE/$NAME/"
+cp "$ROOT/windows/list_cameras.py"  "$STAGE/$NAME/"
 cp "$ROOT/windows/README-WINDOWS.md" "$STAGE/$NAME/README.md"
 cp "$ROOT/config.example.yaml"       "$STAGE/$NAME/"
 cp "$ROOT/pyproject.toml"            "$STAGE/$NAME/"
@@ -32,9 +33,10 @@ anycam-to-rtsp - Windows capture host
 2. If scripts are blocked:
        Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 3. Run:
-       .\setup.ps1
+       .\run.ps1
 
-Then read README.md.
+That is the whole thing: it sets up, finds your cameras, works out which
+MJPEG decoder they accept, and starts streaming. Then read README.md.
 
 Requires Python 3.12+ (https://www.python.org/downloads/windows/,
 tick "Add python.exe to PATH"). setup.ps1 downloads ffmpeg and

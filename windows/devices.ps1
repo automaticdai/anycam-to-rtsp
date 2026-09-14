@@ -28,28 +28,13 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ffmpeg = Join-Path $Root 'bin\ffmpeg.exe'
-if (-not (Test-Path $ffmpeg)) {
-    $fallback = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
-    if (-not $fallback) {
-        Write-Host 'ffmpeg not found. Run .\setup.ps1 first.' -ForegroundColor Red
-        exit 1
-    }
-    $ffmpeg = $fallback.Source
-}
+. (Join-Path $Root 'lib.ps1')
 
-$errFile = [System.IO.Path]::GetTempFileName()
-$outFile = [System.IO.Path]::GetTempFileName()
-try {
-    Start-Process -FilePath $ffmpeg `
-                  -ArgumentList '-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy' `
-                  -NoNewWindow -Wait `
-                  -RedirectStandardError $errFile `
-                  -RedirectStandardOutput $outFile | Out-Null
-    $lines = @(Get-Content -LiteralPath $errFile -ErrorAction SilentlyContinue)
-} finally {
-    Remove-Item -LiteralPath $errFile, $outFile -Force -ErrorAction SilentlyContinue
-}
+$ffmpeg = Resolve-Ffmpeg -Root $Root
+
+$result = Invoke-Ffmpeg -Ffmpeg $ffmpeg `
+    -Arguments @('-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy')
+$lines = @($result.StdErr -split "`r?`n")
 
 if ($Raw) {
     Write-Host 'Raw ffmpeg output:' -ForegroundColor DarkGray
