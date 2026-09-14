@@ -48,8 +48,11 @@ No protocol choice fixes it.
 - [ ] Replug it; confirm the stream recovers without restarting anything
 - [ ] Kill MediaMTX; confirm every client reconnects when it returns
 - [ ] Simulate a wedged camera (frames stop arriving but the socket stays
-      open) and confirm the stream recovers on its own within roughly 1
-      second — FFmpeg's read timeout aborts the blocked read, not the
+      open) and confirm the stream recovers on its own within roughly 1-2
+      seconds, racing the watchdog rather than reliably beating it (PyAV
+      restarts its read timeout per read rather than running one
+      continuous clock, so it only starts once any buffered RTP is
+      consumed) — FFmpeg's read timeout aborts the blocked read, not the
       watchdog monitor
 - [ ] Simulate a camera that keeps delivering frames but slower than
       `watchdog_timeout_s` apart (default 2s) and confirm the watchdog

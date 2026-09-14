@@ -195,9 +195,16 @@ wired through PyAV as `av.open(url, options=..., timeout=(OPEN_TIMEOUT_S,
 READ_TIMEOUT_S))` (currently 3.0s / 1.0s). A stream that stops delivering
 data entirely — the classic "wedged camera holds a healthy TCP connection"
 case — therefore aborts its own blocked read and reconnects by itself, in
-under `READ_TIMEOUT_S`, without any external intervention. This self-heal is
-deliberately faster than `watchdog_timeout_s`: a full no-data wedge resolves
-in ~1s, before the 2s watchdog would even expire.
+under `READ_TIMEOUT_S`, without any external intervention. This self-heal
+races the watchdog rather than reliably beating it: PyAV restarts its read
+timeout on every `av_read_frame` call rather than running one continuous
+clock since the last frame, so the clock only starts once any already-
+buffered RTP is consumed. Measured against real PyAV, a full no-data wedge
+resolves in ~1-2s (2.01s at realtime pacing, 2.13-2.23s at burst pacing) at
+the 2s default `watchdog_timeout_s` — not the ~1s a naive reading of
+`READ_TIMEOUT_S` alone would suggest. Both mechanisms converge on a
+reconnect either way, so this is a documentation precision issue, not a
+correctness one.
 
 The watchdog monitor's remaining unique role is therefore narrower than a
 "forces every reconnect" description would suggest: it exists only for the

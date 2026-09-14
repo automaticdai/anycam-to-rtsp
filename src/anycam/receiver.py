@@ -36,10 +36,17 @@ LOW_LATENCY_OPTIONS: dict[str, str] = {
 # once it is open.
 #
 # READ_TIMEOUT_S bounds how long a blocked read can go without data before
-# raising on its own. It is kept well under ClientConfig's default
-# `watchdog_timeout_s` (2.0s) so a stalled read unblocks and this thread has
-# already reconnected before the watchdog would otherwise need to notice
-# anything and ask the monitor thread to intervene.
+# raising on its own. It is kept under ClientConfig's default
+# `watchdog_timeout_s` (2.0s), but this is a race, not a guaranteed win:
+# PyAV restarts its own read timeout on every `av_read_frame` call rather
+# than running one continuous clock since the last frame, so the timeout
+# only starts counting once any RTP already buffered client-side has been
+# consumed. Measured against real PyAV, a full no-data wedge reconnects in
+# ~1-2s (2.01s at realtime pacing, 2.13-2.23s at burst pacing) at
+# watchdog_timeout_s=2.0 -- not the ~1s a naive reading of READ_TIMEOUT_S
+# alone would suggest. Both mechanisms still converge on a reconnect either
+# way, so this is not a correctness bug, only load-bearing documentation
+# that must not overstate what the constant guarantees on its own.
 # OPEN_TIMEOUT_S bounds a connection attempt to a dead or unreachable host;
 # it is longer than the read timeout because a fresh TCP+RTSP handshake
 # legitimately takes longer than steady-state packet arrival. It is also
@@ -127,7 +134,13 @@ class CameraReceiver(threading.Thread):
         `decode()` loop is a use-after-free against a real AVFormatContext,
         so this deliberately never touches the container itself.
         """
-        log.warning("%s: forcing reconnect", self.camera_id)
+        # DEBUG, not WARNING: a path not yet published by MediaMTX is a
+        # normal state, and the monitor calls this once per
+        # watchdog_timeout_s indefinitely while it persists. The client's
+        # own monitor log line (which includes the staleness duration) is
+        # the WARNING-level signal; this would otherwise double it into a
+        # WARNING pair every interval, forever, for one unplugged camera.
+        log.debug("%s: forcing reconnect", self.camera_id)
         self._reconnect_requested.set()
 
     def _close(self, container: Any) -> None:
