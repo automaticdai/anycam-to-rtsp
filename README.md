@@ -42,10 +42,12 @@ binaries on `PATH` (e.g. `~/.local/bin`):
     anycam watch -c config.yaml
 
 Versions verified in this environment: ffmpeg 7.0.2-static, MediaMTX v1.9.3,
-PyAV 18.1.0. Installing via a package manager (`apt install ffmpeg`, plus a
-manually-downloaded MediaMTX binary) works too and is the more common path on
-a persistent machine, but was not the one exercised here — this repo's own
-verification used the no-sudo, user-local install above.
+PyAV 18.1.0 — these binaries were installed and the automated suites (below)
+were run against them. Installing via a package manager (`apt install
+ffmpeg`, plus a manually-downloaded MediaMTX binary) works too and is the
+more common path on a persistent machine; the exact no-sudo tarball commands
+above were not independently re-verified from scratch as part of this
+check.
 
 ## Usage
 
