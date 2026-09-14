@@ -16,6 +16,8 @@ def build_capture_command(camera: CameraConfig, rtsp_url: str, *,
     argv = ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-nostdin"]
 
     if s.type == "dshow":
+        if s.device is None:
+            raise ValueError("dshow source requires a device name; got None")
         argv += ["-f", "dshow", "-rtbufsize", "64M",
                  "-framerate", str(v.fps),
                  "-video_size", f"{v.width}x{v.height}"]
@@ -40,5 +42,33 @@ def build_capture_command(camera: CameraConfig, rtsp_url: str, *,
 
 
 def command_string(argv: list[str]) -> str:
-    """Render argv as a command line for MediaMTX's runOnInit (Windows shell)."""
-    return " ".join(f'"{a}"' if " " in a else a for a in argv)
+    """Render argv as a command line for MediaMTX's runOnInit (Windows shell).
+
+    Quotes arguments containing spaces. Escapes embedded double quotes by
+    doubling them. Raises ValueError if an argument contains % (expanded by
+    cmd.exe even in quotes) or ASCII control characters.
+    """
+    result = []
+    for arg in argv:
+        # Check for problematic characters
+        if "%" in arg:
+            raise ValueError(
+                f"Cannot safely quote argument {arg!r}: contains %, which cmd.exe "
+                "expands even inside quotes. Rename the device in Windows Device "
+                "Manager or use a different camera."
+            )
+        for char in arg:
+            if ord(char) < 32:  # ASCII control characters
+                raise ValueError(
+                    f"Cannot safely quote argument {arg!r}: contains control "
+                    f"character {char!r}. Rename the device in Windows or use a "
+                    "different camera."
+                )
+
+        # Quote if it contains spaces, escape any embedded quotes by doubling
+        if " " in arg:
+            escaped = arg.replace('"', '""')
+            result.append(f'"{escaped}"')
+        else:
+            result.append(arg)
+    return " ".join(result)

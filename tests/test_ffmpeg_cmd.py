@@ -102,3 +102,70 @@ def test_unknown_source_type_raises():
 def test_command_string_quotes_device_names_containing_spaces():
     argv = build_capture_command(dshow_cam(), URL)
     assert '"video=Logitech BRIO"' in command_string(argv)
+
+
+def test_command_string_escapes_embedded_double_quotes():
+    """Embedded quotes must be doubled to preserve quote parity."""
+    cam = CameraConfig(
+        id="cam0",
+        source=SourceConfig(type="dshow", device='Cam "Pro" HD'),
+        video=VideoConfig(1920, 1080, 30),
+        encode=EncodeConfig(),
+    )
+    argv = build_capture_command(cam, URL)
+    cmd = command_string(argv)
+    # The device argument should be quoted and internal quotes doubled
+    assert '"video=Cam ""Pro"" HD"' in cmd
+
+
+def test_command_string_raises_on_percent_sign():
+    """% is expanded by cmd.exe even inside quotes; must reject it."""
+    cam = CameraConfig(
+        id="cam0",
+        source=SourceConfig(type="dshow", device="Cam %var%"),
+        video=VideoConfig(1920, 1080, 30),
+        encode=EncodeConfig(),
+    )
+    argv = build_capture_command(cam, URL)
+    with pytest.raises(ValueError, match="contains %"):
+        command_string(argv)
+
+
+def test_command_string_allows_parentheses_in_quoted_argument():
+    """Parentheses are safe inside proper quotes."""
+    cam = CameraConfig(
+        id="cam0",
+        source=SourceConfig(type="dshow", device="HD Webcam (0bda:5675)"),
+        video=VideoConfig(1920, 1080, 30),
+        encode=EncodeConfig(),
+    )
+    argv = build_capture_command(cam, URL)
+    cmd = command_string(argv)
+    # Should contain the device string safely quoted with parentheses intact
+    assert '"video=HD Webcam (0bda:5675)"' in cmd
+
+
+def test_command_string_allows_ampersand_in_quoted_argument():
+    """& is safe inside proper quotes; only breaks if quotes are malformed."""
+    cam = CameraConfig(
+        id="cam0",
+        source=SourceConfig(type="dshow", device="Cam & Device"),
+        video=VideoConfig(1920, 1080, 30),
+        encode=EncodeConfig(),
+    )
+    argv = build_capture_command(cam, URL)
+    cmd = command_string(argv)
+    # Should contain the device string safely quoted with & intact
+    assert '"video=Cam & Device"' in cmd
+
+
+def test_dshow_device_none_raises_clear_error():
+    """device=None should raise before producing nonsense like video=None."""
+    cam = CameraConfig(
+        id="cam0",
+        source=SourceConfig(type="dshow", device=None),
+        video=VideoConfig(1920, 1080, 30),
+        encode=EncodeConfig(),
+    )
+    with pytest.raises(ValueError, match="device name"):
+        build_capture_command(cam, URL)
