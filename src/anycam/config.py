@@ -1,15 +1,48 @@
 from __future__ import annotations
 
+import dataclasses
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypeVar
 
 import yaml
 
 VALID_SOURCE_TYPES = {"dshow", "lavfi"}
 
+# Conservative charset for a camera id: it flows unchecked into a MediaMTX
+# path key, a publish URL and a consume URL, so anything that could upset
+# any of those three (spaces, slashes, ...) must be rejected up front rather
+# than fail in three different places at once.
+_VALID_CAMERA_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
 
 class ConfigError(ValueError):
     """Raised when a configuration file is malformed or inconsistent."""
+
+
+_T = TypeVar("_T")
+
+
+def _construct(cls: type[_T], raw: dict, section: str, **fixed) -> _T:
+    """Build a config dataclass from a raw mapping, turning an unknown or
+    otherwise invalid key into a `ConfigError` that names the offending key
+    and section -- instead of a raw `TypeError` with no such context, which
+    previously escaped all the way out of `load_config` uncaught.
+
+    `fixed` are additional, already-validated constructor kwargs (e.g. a
+    pre-built `BackoffConfig`) that are not expected to appear in `raw`.
+    """
+    valid = {f.name for f in dataclasses.fields(cls)}
+    unknown = set(raw) - valid
+    if unknown:
+        raise ConfigError(
+            f"unknown key(s) {sorted(unknown)} in {section!r} section; "
+            f"expected one of {sorted(valid - set(fixed))}")
+    try:
+        return cls(**raw, **fixed)
+    except TypeError as exc:
+        raise ConfigError(f"invalid {section!r} section: {exc}") from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,19 +103,27 @@ class AppConfig:
 def _camera(raw: dict) -> CameraConfig:
     if "id" not in raw:
         raise ConfigError("camera entry is missing 'id'")
+    cam_id = raw["id"]
+    if not _VALID_CAMERA_ID.match(str(cam_id)):
+        raise ConfigError(
+            f"camera id {cam_id!r} is not valid: it must contain only "
+            f"letters, digits, underscores, and hyphens (it becomes a "
+            f"MediaMTX path key and part of a publish/consume URL)")
     src = raw.get("source") or {}
     stype = src.get("type")
     if stype not in VALID_SOURCE_TYPES:
         raise ConfigError(
-            f"camera {raw['id']}: unknown source type {stype!r}; "
+            f"camera {cam_id}: unknown source type {stype!r}; "
             f"expected one of {sorted(VALID_SOURCE_TYPES)}")
     if stype == "dshow" and not src.get("device"):
-        raise ConfigError(f"camera {raw['id']}: dshow source requires 'device'")
+        raise ConfigError(f"camera {cam_id}: dshow source requires 'device'")
     return CameraConfig(
-        id=str(raw["id"]),
+        id=str(cam_id),
         source=SourceConfig(type=stype, device=src.get("device")),
-        video=VideoConfig(**(raw.get("video") or {})),
-        encode=EncodeConfig(**(raw.get("encode") or {})),
+        video=_construct(VideoConfig, raw.get("video") or {},
+                         f"camera {cam_id} video"),
+        encode=_construct(EncodeConfig, raw.get("encode") or {},
+                          f"camera {cam_id} encode"),
     )
 
 
@@ -99,9 +140,10 @@ def load_config(path: str | Path) -> AppConfig:
         raise ConfigError(f"duplicate camera ids: {sorted(dupes)}")
 
     client_raw = dict(raw.get("client") or {})
-    backoff = BackoffConfig(**(client_raw.pop("backoff", None) or {}))
+    backoff = _construct(BackoffConfig, client_raw.pop("backoff", None) or {},
+                        "client.backoff")
     return AppConfig(
-        server=ServerConfig(**(raw.get("server") or {})),
+        server=_construct(ServerConfig, raw.get("server") or {}, "server"),
         cameras=cameras,
-        client=ClientConfig(backoff=backoff, **client_raw),
+        client=_construct(ClientConfig, client_raw, "client", backoff=backoff),
     )

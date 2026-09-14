@@ -44,6 +44,23 @@ def test_invalid_config_reports_error_not_traceback(tmp_path, capsys):
     assert "at least one camera" in capsys.readouterr().err
 
 
+def test_typo_d_config_key_reports_error_not_traceback(tmp_path, capsys):
+    """A typo'd key (e.g. `framerate` instead of `fps`) used to raise a raw
+    TypeError that cli.py's handler did not catch, producing a full
+    traceback with no `error:` line and no exit 2 -- on the single most
+    likely user error."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(CONFIG.replace(
+        "video: {width: 1920, height: 1080, fps: 30}",
+        "video: {width: 1920, height: 1080, framerate: 30}"))
+
+    assert main(["serve-config", "-c", str(cfg),
+                 "-o", str(tmp_path / "m.yml")]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error:")
+    assert "framerate" in err
+
+
 def test_missing_config_file_reports_error(tmp_path, capsys):
     assert main(["serve-config", "-c", str(tmp_path / "nope.yaml"),
                  "-o", str(tmp_path / "m.yml")]) == 2
