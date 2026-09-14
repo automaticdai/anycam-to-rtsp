@@ -1,4 +1,5 @@
 import threading
+import time
 
 from anycam.frame import Frame
 from anycam.freshness import LatestFrameBuffer
@@ -56,20 +57,32 @@ def test_producer_outrunning_consumer_always_yields_newest():
     buf = LatestFrameBuffer()
     seen = []
     stop = threading.Event()
+    barrier = threading.Barrier(2)  # Ensure both threads start near-simultaneously
 
     def produce():
+        barrier.wait()  # Wait for consumer to be ready
         for i in range(2000):
             buf.put(frame(i))
+            if i % 10 == 0:  # Yield occasionally to allow consumer thread to run
+                time.sleep(0)
         stop.set()
 
-    t = threading.Thread(target=produce)
-    t.start()
-    while not stop.is_set():
-        got = buf.take()
-        if got is not None:
-            seen.append(got.frame_id)
-    t.join()
+    def consume():
+        barrier.wait()  # Wait for producer to be ready
+        while not stop.is_set():
+            got = buf.take()
+            if got is not None:
+                seen.append(got.frame_id)
 
+    t_producer = threading.Thread(target=produce)
+    t_consumer = threading.Thread(target=consume)
+    t_producer.start()
+    t_consumer.start()
+    t_producer.join()
+    t_consumer.join()
+
+    # Verify non-vacuous execution: consumer must have consumed some frames
+    assert len(seen) > 100, f"consumer must execute meaningfully; saw {len(seen)} frames"
     assert seen == sorted(seen), "frames must never be delivered out of order"
     assert buf.accepted == 2000
     assert buf.accepted - buf.dropped == len(seen) + buf.depth
