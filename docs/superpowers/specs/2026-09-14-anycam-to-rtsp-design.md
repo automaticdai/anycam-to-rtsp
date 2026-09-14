@@ -166,6 +166,15 @@ calibration results.
 always takes the newest frame and older frames are overwritten. There is no
 staleness threshold to tune and no mechanism by which a backlog can accumulate.
 
+> **Correction (post-Task 10).** An earlier version of this section described
+> layer 3 as a watchdog that forces a reconnect by closing the receiver's
+> container from another thread. Task 10's integration suite found that
+> mechanism unsafe against real PyAV — a libav container may only be closed
+> by the thread that owns it, and closing it while that thread is inside
+> `decode()` is a use-after-free that segfaulted the process. It was replaced
+> before this system was built; the description below is what actually ships.
+> Recorded here so the closing-from-another-thread design is not re-derived.
+
 **Three independent supervision layers**, because the failure modes are
 independent:
 
@@ -173,14 +182,36 @@ independent:
 2. The WSL client reconnects its RTSP session with exponential backoff:
    200ms initial, doubling, capped at 5s, reset to initial on a successful
    frame (server restart, path not yet published)
-3. A per-stream watchdog treats *no new frame for 2s* as failure even while
-   the socket remains open, and forces a reconnect. At 30fps that is 60 missed
-   frames — long enough not to trip on a transient stall, short enough that a
-   wedged camera is caught before it matters.
+3. A per-stream watchdog monitor thread catches the one case the mechanisms
+   below cannot: a stream that keeps delivering frames, just too slowly to
+   beat `watchdog_timeout_s` (2.0s) between them. It polls each receiver's
+   watchdog from outside the receiver thread and calls `force_reconnect()`,
+   which sets a flag the decode loop checks once per decoded frame.
 
-Layer 3 is not redundant. A wedged USB camera holds a healthy TCP connection
-indefinitely; without it, a frozen stream is indistinguishable from a working
-one until someone notices detections have stopped changing.
+A container is only ever opened, read from, and closed by its own receiver
+thread — never by the watchdog monitor or any other thread. Blocking I/O
+inside that thread is instead bounded by FFmpeg's own interrupt callback,
+wired through PyAV as `av.open(url, options=..., timeout=(OPEN_TIMEOUT_S,
+READ_TIMEOUT_S))` (currently 3.0s / 1.0s). A stream that stops delivering
+data entirely — the classic "wedged camera holds a healthy TCP connection"
+case — therefore aborts its own blocked read and reconnects by itself, in
+under `READ_TIMEOUT_S`, without any external intervention. This self-heal
+races the watchdog rather than reliably beating it: PyAV restarts its read
+timeout on every `av_read_frame` call rather than running one continuous
+clock since the last frame, so the clock only starts once any already-
+buffered RTP is consumed. Measured against real PyAV, a full no-data wedge
+resolves in ~1-2s (2.01s at realtime pacing, 2.13-2.23s at burst pacing) at
+the 2s default `watchdog_timeout_s` — not the ~1s a naive reading of
+`READ_TIMEOUT_S` alone would suggest. Both mechanisms converge on a
+reconnect either way, so this is a documentation precision issue, not a
+correctness one.
+
+The watchdog monitor's remaining unique role is therefore narrower than a
+"forces every reconnect" description would suggest: it exists only for the
+case where the read timeout structurally cannot fire — frames keep arriving,
+just too slowly — because `force_reconnect()`'s flag is only observed between
+decoded frames and cannot unblock a read that has already stopped producing
+anything to check the flag against.
 
 Camera failures are isolated: separate process, path, thread, and watchdog.
 
@@ -218,7 +249,8 @@ and software decode, validating protocol and supervision logic without a GPU.
 
 **Bench verification** (written checklist, not automated): DirectShow
 enumeration quirks (duplicate device names, non-ASCII names, and the misleading
-non-zero exit code from `-list_devices`), NVENC/NVDEC on real hardware, the
+exit code from `-list_devices`, which varies by build), NVENC/NVDEC on real
+hardware, the
 four-camera USB bandwidth ceiling, unplug/replug recovery, latency calibration.
 
 ## Configuration

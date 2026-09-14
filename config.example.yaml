@@ -1,0 +1,16 @@
+server:
+  rtsp_port: 8554
+
+cameras:
+  - id: cam0
+    source: {type: dshow, device: "Logitech BRIO"}
+    video:  {width: 1920, height: 1080, fps: 30}
+    encode: {codec: h264_nvenc, preset: p1, tune: ull, bitrate: 8M, gop: 30}
+  - id: cam1
+    source: {type: dshow, device: "HD Pro Webcam C920"}
+    video:  {width: 1920, height: 1080, fps: 30}
+    encode: {codec: h264_nvenc, preset: p1, tune: ull, bitrate: 8M, gop: 30}
+
+client:
+  watchdog_timeout_s: 2.0
+  backoff: {initial_s: 0.2, factor: 2.0, max_s: 5.0}
