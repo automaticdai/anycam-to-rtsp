@@ -90,8 +90,11 @@ dependency — a WSL client that only consumes frames never needs it:
     python tools/calibrate_latency.py display                          # on Windows
     python tools/calibrate_latency.py measure -c config.yaml --camera cam0  # in WSL
 
-If `measure` fails with `ModuleNotFoundError: No module named 'cv2'`, that
-extra has not been installed.
+If that extra is not installed, `measure` exits with a message telling you
+to install it, rather than a raw import traceback:
+
+    error: opencv-python is required for `measure` but is not installed. Install the calibration extra with:
+        pip install -e ".[calibration]"
 
 ## Design
 
