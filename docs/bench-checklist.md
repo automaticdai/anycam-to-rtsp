@@ -64,6 +64,10 @@ No protocol choice fixes it.
 
 - [ ] Run `tools/calibrate_latency.py` per the procedure in its docstring
       (needs the `calibration` extra: `pip install -e ".[calibration]"`)
+- [ ] Run BOTH halves in WSL. The `display` clock shown in a WSL terminal is
+      on the Windows screen for the camera to film, and sharing one clock
+      between the display and the measurement removes Windows/WSL skew from
+      the result
 - [ ] Record the measured total latency per camera model
 - [ ] Sanity check against the spec's budget: the camera itself is expected to
       dominate. A total far above roughly 60ms suggests the receiver's jitter

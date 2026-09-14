@@ -1,9 +1,14 @@
 """Measure true glass-to-inference latency.
 
 Procedure:
-  1. On Windows, open a large millisecond clock in a browser or run
-     `python tools/calibrate_latency.py display` on the Windows side.
-  2. Point one camera at that screen.
+  1. Run `python tools/calibrate_latency.py display` IN WSL, in a terminal
+     window you can see on the Windows screen. That window is displayed by
+     Windows, so the camera can film it -- and because the clock and the
+     measurement then share one clock, no Windows/WSL skew enters the result.
+     Running the clock on Windows instead reintroduces exactly the cross-OS
+     skew this measurement exists to avoid.
+  2. Point one camera at that terminal window, filling as much of the frame
+     as you can and focused on the digits.
   3. Run `python tools/calibrate_latency.py measure -c config.yaml --camera cam0`
      in WSL. It saves annotated frames showing the displayed time alongside
      the WSL arrival time.
