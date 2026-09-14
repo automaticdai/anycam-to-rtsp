@@ -238,6 +238,37 @@ def test_a_stalled_camera_recovering_does_not_disturb_its_healthy_peers():
         assert wait_for(lambda: client.latest("cam2").frame_id > healthy2)
 
 
+def test_a_never_connecting_camera_reports_stalled_consistently():
+    """Before this fix, the monitor rate-limited its own force_reconnect()
+    calls by calling rx.watchdog.beat() -- the very clock StreamStats.age_s
+    reads -- so age_s sawtoothed 0 -> timeout -> 0 forever and a camera that
+    never delivered a single frame reported STALLED on only a small
+    fraction of samples (measured: 4 of 60). A camera that never delivers a
+    frame must report STALLED on every sample once the timeout has first
+    elapsed, not intermittently."""
+    cfg = app_config(1)
+    cfg = AppConfig(server=cfg.server, cameras=cfg.cameras,
+                    client=ClientConfig(watchdog_timeout_s=0.1))
+
+    with MultiCameraClient(cfg, host="h",
+                           opener=lambda u, o: FakeContainer(count=0),
+                           monitor_interval_s=0.02) as client:
+        timeout_s = cfg.client.watchdog_timeout_s
+        # Let the watchdog timeout elapse at least once before sampling.
+        time.sleep(timeout_s * 3)
+
+        samples = []
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            samples.append(client.stats()["cam0"].is_stalled(timeout_s))
+            time.sleep(0.02)
+
+    assert len(samples) >= 10
+    assert all(samples), (
+        "a camera that never delivered a frame must be STALLED on every "
+        "sample, not intermittently")
+
+
 def test_monitor_survives_a_per_camera_exception(caplog):
     """One camera's monitor-loop failure must not stop supervision of the
     rest: the monitor thread must keep running and keep servicing every

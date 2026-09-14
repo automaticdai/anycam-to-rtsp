@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -33,6 +34,14 @@ class MultiCameraClient:
                 cam.id, self._url(cam.id), config.client, opener=opener)
             for cam in config.cameras
         }
+        # Tracks, per camera, when the monitor last called force_reconnect()
+        # -- purely to rate-limit how often it does so while a stream stays
+        # expired. This is deliberately separate from each receiver's frame
+        # watchdog: beating that watchdog here (as this used to do) resets
+        # the very clock `age_s`/`is_stalled` read, making a camera that
+        # never delivers a frame sawtooth between "stalled" and "ok" instead
+        # of reporting staleness truthfully.
+        self._last_forced_ns: dict[str, int] = {}
 
     def _url(self, camera_id: str) -> str:
         return f"rtsp://{self._host}:{self._config.server.rtsp_port}/{camera_id}"
@@ -105,15 +114,27 @@ class MultiCameraClient:
         place whose whole purpose is treating cameras independently, so it
         must not let one camera's failure end supervision for every other
         camera by killing this daemon thread.
+
+        Rate-limiting its own `force_reconnect()` calls uses a timestamp
+        private to this thread (`_last_forced_ns`), not `rx.watchdog.beat()`.
+        The watchdog's clock is also what `stats()` reports as `age_s`, so
+        beating it here would make a camera that never delivers a frame
+        report staleness inconsistently instead of truthfully.
         """
         while not self._stop.wait(self._monitor_interval_s):
+            now_ns = time.monotonic_ns()
+            timeout_ns = int(self._config.client.watchdog_timeout_s * 1e9)
             for cid, rx in self._receivers.items():
                 try:
-                    if rx.watchdog.expired():
-                        log.warning("%s: no frames for %.2fs, reconnecting",
-                                    cid, rx.watchdog.age_s())
-                        rx.watchdog.beat()
-                        rx.force_reconnect()
+                    if not rx.watchdog.expired():
+                        continue
+                    last_forced_ns = self._last_forced_ns.get(cid, 0)
+                    if now_ns - last_forced_ns < timeout_ns:
+                        continue
+                    log.warning("%s: no frames for %.2fs, reconnecting",
+                                cid, rx.watchdog.age_s())
+                    self._last_forced_ns[cid] = now_ns
+                    rx.force_reconnect()
                 except Exception:
                     log.warning(
                         "%s: monitor check failed; leaving this camera's "

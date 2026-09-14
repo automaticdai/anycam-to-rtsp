@@ -21,7 +21,10 @@ class StreamStats:
 
     def format_line(self, timeout_s: float = 2.0) -> str:
         state = "STALLED" if self.is_stalled(timeout_s) else "ok"
-        return (f"{self.camera_id:<8} {state:<8} "
+        line = (f"{self.camera_id:<8} {state:<8} "
                 f"frames={self.frames:<8} dropped={self.dropped:<8} "
                 f"reconnects={self.reconnects:<4} age={self.age_s:6.3f}s "
                 f"depth={self.depth}")
+        if self.last_error is not None:
+            line += f" error={self.last_error}"
+        return line

@@ -23,3 +23,20 @@ def test_healthy_stream_is_not_stalled():
                         age_s=0.02, depth=1, last_error=None)
     assert not stats.is_stalled(timeout_s=2.0)
     assert "STALLED" not in stats.format_line(timeout_s=2.0)
+
+
+def test_format_line_renders_last_error_when_set():
+    """last_error is collected but was previously silently dropped by
+    format_line -- the one place `anycam watch` renders it for a human."""
+    stats = StreamStats(camera_id="cam0", frames=0, dropped=0, reconnects=3,
+                        age_s=9.5, depth=0,
+                        last_error="OSError: camera 1 is unplugged")
+    line = stats.format_line()
+    assert "camera 1 is unplugged" in line
+
+
+def test_format_line_omits_error_field_when_none():
+    stats = StreamStats(camera_id="cam0", frames=10, dropped=0, reconnects=0,
+                        age_s=0.02, depth=1, last_error=None)
+    line = stats.format_line()
+    assert "error=" not in line
