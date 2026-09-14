@@ -42,32 +42,32 @@ def build_capture_command(camera: CameraConfig, rtsp_url: str, *,
 
 
 def command_string(argv: list[str]) -> str:
-    """Render argv as a command line for MediaMTX's runOnInit (Windows shell).
+    """Render argv as a command line for MediaMTX's runOnInit.
 
-    Quotes arguments containing spaces. Escapes embedded double quotes by
-    doubling them. Raises ValueError if an argument contains % (expanded by
-    cmd.exe even in quotes) or ASCII control characters.
+    MediaMTX parses the output via go-shellquote.Split() and execs the result
+    directly without a shell (verified against v1.9.3; only uses cmd.exe if
+    the command literally starts with "cmd " or "cmd.exe ").
+
+    Quotes arguments containing spaces. Escapes backslashes and double quotes
+    using backslash escaping (go-shellquote's recognized escape sequence).
+    Raises ValueError if an argument contains ASCII control characters
+    (which break go-shellquote's parser).
     """
     result = []
     for arg in argv:
-        # Check for problematic characters
-        if "%" in arg:
-            raise ValueError(
-                f"Cannot safely quote argument {arg!r}: contains %, which cmd.exe "
-                "expands even inside quotes. Rename the device in Windows Device "
-                "Manager or use a different camera."
-            )
+        # Check for control characters that break go-shellquote's Split()
         for char in arg:
-            if ord(char) < 32:  # ASCII control characters
+            if ord(char) < 32:  # ASCII control characters (including newline)
                 raise ValueError(
-                    f"Cannot safely quote argument {arg!r}: contains control "
-                    f"character {char!r}. Rename the device in Windows or use a "
-                    "different camera."
+                    f"Cannot quote argument {arg!r}: contains control character "
+                    f"{char!r}. Use a different argument or value."
                 )
 
-        # Quote if it contains spaces, escape any embedded quotes by doubling
-        if " " in arg:
-            escaped = arg.replace('"', '""')
+        # Escape backslashes first, then quotes (go-shellquote's escape rules)
+        escaped = arg.replace('\\', '\\\\').replace('"', '\\"')
+
+        # Quote if it contains spaces or special characters
+        if " " in arg or escaped != arg:
             result.append(f'"{escaped}"')
         else:
             result.append(arg)

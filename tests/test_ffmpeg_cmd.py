@@ -105,7 +105,7 @@ def test_command_string_quotes_device_names_containing_spaces():
 
 
 def test_command_string_escapes_embedded_double_quotes():
-    """Embedded quotes must be doubled to preserve quote parity."""
+    """Embedded quotes must be backslash-escaped for go-shellquote round-trip."""
     cam = CameraConfig(
         id="cam0",
         source=SourceConfig(type="dshow", device='Cam "Pro" HD'),
@@ -114,21 +114,30 @@ def test_command_string_escapes_embedded_double_quotes():
     )
     argv = build_capture_command(cam, URL)
     cmd = command_string(argv)
-    # The device argument should be quoted and internal quotes doubled
-    assert '"video=Cam ""Pro"" HD"' in cmd
+    # The device argument should be quoted with backslash-escaped quotes
+    assert '"video=Cam \\"Pro\\" HD"' in cmd
+    # Verify the escaped form survives: when go-shellquote parses this,
+    # it should extract 'video=Cam "Pro" HD' (the quote is present after parsing)
+    import shlex
+    # shlex uses similar escaping rules to go-shellquote
+    parsed = shlex.split(cmd)
+    assert any('Cam "Pro" HD' in arg for arg in parsed)
 
 
-def test_command_string_raises_on_percent_sign():
-    """% is expanded by cmd.exe even inside quotes; must reject it."""
+def test_command_string_accepts_percent_in_rtsp_url():
+    """% has no special meaning to go-shellquote; RTSP URLs with %20 etc. work."""
+    # RTSP URL with percent-encoded space (valid and common)
+    url_with_percent = "rtsp://127.0.0.1:8554/cam%20name"
     cam = CameraConfig(
         id="cam0",
-        source=SourceConfig(type="dshow", device="Cam %var%"),
+        source=SourceConfig(type="dshow", device="Logitech BRIO"),
         video=VideoConfig(1920, 1080, 30),
         encode=EncodeConfig(),
     )
-    argv = build_capture_command(cam, URL)
-    with pytest.raises(ValueError, match="contains %"):
-        command_string(argv)
+    argv = build_capture_command(cam, url_with_percent)
+    # Should not raise; % is just a literal character to go-shellquote
+    cmd = command_string(argv)
+    assert url_with_percent in cmd
 
 
 def test_command_string_allows_parentheses_in_quoted_argument():
