@@ -44,7 +44,7 @@ sides of the WSL boundary.
 ```
 USB cam ──DirectShow──▶ ffmpeg ──NVENC h264──▶ MediaMTX /camN
                                                     │ RTSP over TCP
-                          WSL: PyAV ──NVDEC──▶ deque(maxlen=1) ──▶ inference
+                    WSL: PyAV decode (CPU) ──▶ deque(maxlen=1) ──▶ inference
 ```
 
 One ffmpeg process, one RTSP path, one receiver thread, and one watchdog per
@@ -103,8 +103,15 @@ options = {
 ```
 
 PyAV is required over `cv2.VideoCapture`, which buffers internally and exposes
-neither PTS nor low-delay flags. NVDEC is used when PyAV exposes CUDA hwaccel,
-falling back to software decode otherwise.
+neither PTS nor low-delay flags.
+
+**Decoding is on the CPU.** `av.open()` is called without a hardware
+accelerator, so despite NVDEC being available on the target machine the shipped
+client decodes in software. This was originally specified as "NVDEC when PyAV
+exposes CUDA hwaccel, software otherwise"; the fallback is what was built, and
+the spec is corrected here rather than left describing an optimisation that does
+not exist. Software H.264 decode is cheap enough for one or two 1080p30 streams;
+at four it is worth revisiting, and is a contained change to `default_opener`.
 
 RTSP runs over TCP rather than UDP: on a virtual NIC there is no packet loss to
 route around, so UDP would contribute corruption modes and no benefit.
@@ -153,7 +160,7 @@ configuration; yields a constant added to the estimate.
 | NVENC (`-tune ull -preset p1 -bf 0`) | 3–5ms |
 | MediaMTX relay + vNIC | 1–2ms |
 | RTSP demux jitter buffer | 0–40ms (must be tuned to ~0) |
-| NVDEC decode | 2–3ms |
+| Software H.264 decode | ~3–8ms (NVDEC would be 2–3ms, not currently requested) |
 | Queue wait | ~0 by construction |
 
 The camera itself is expected to dominate. This is the sanity anchor for
