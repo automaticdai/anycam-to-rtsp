@@ -61,6 +61,21 @@ def test_typo_d_config_key_reports_error_not_traceback(tmp_path, capsys):
     assert "framerate" in err
 
 
+def test_scalar_config_section_reports_error_not_traceback(tmp_path, capsys):
+    """A scalar where a mapping is expected (e.g. `server: 8554` instead of
+    `server: {rtsp_port: 8554}`) used to raise a raw TypeError from
+    `set(raw)` in `_construct`, escaping the CLI's error handler entirely:
+    a full traceback, no `error:` line, no exit 2."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(CONFIG.replace("server: {rtsp_port: 8554}", "server: 8554"))
+
+    assert main(["serve-config", "-c", str(cfg),
+                 "-o", str(tmp_path / "m.yml")]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error:")
+    assert "server" in err
+
+
 def test_missing_config_file_reports_error(tmp_path, capsys):
     assert main(["serve-config", "-c", str(tmp_path / "nope.yaml"),
                  "-o", str(tmp_path / "m.yml")]) == 2

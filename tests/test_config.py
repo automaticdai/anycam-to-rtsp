@@ -123,6 +123,24 @@ def test_rejects_typo_d_key_in_backoff_section(tmp_path):
         load_config(write(tmp_path, text))
 
 
+def test_rejects_scalar_server_section(tmp_path):
+    """`server: 8554` instead of `server: {rtsp_port: 8554}` used to reach
+    `set(raw)` in `_construct` with `raw` being the int 8554, raising a raw
+    `TypeError` ("'int' object is not iterable") with no section context
+    that escaped `load_config` uncaught."""
+    text = VALID.replace("server:\n  rtsp_port: 8554", "server: 8554")
+    with pytest.raises(ConfigError, match="server"):
+        load_config(write(tmp_path, text))
+
+
+def test_rejects_scalar_video_section(tmp_path):
+    """Same bug, a different section: `video: 30` instead of a mapping."""
+    text = VALID.replace("video: {width: 1920, height: 1080, fps: 30}",
+                         "video: 30")
+    with pytest.raises(ConfigError, match="video"):
+        load_config(write(tmp_path, text))
+
+
 def test_rejects_camera_id_with_invalid_characters(tmp_path):
     """A camera id flows unchecked into a MediaMTX path key, a publish URL
     and a consume URL; a space (or other unsafe character) would break all

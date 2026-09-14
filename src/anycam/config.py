@@ -33,6 +33,15 @@ def _construct(cls: type[_T], raw: dict, section: str, **fixed) -> _T:
     `fixed` are additional, already-validated constructor kwargs (e.g. a
     pre-built `BackoffConfig`) that are not expected to appear in `raw`.
     """
+    if not isinstance(raw, dict):
+        # A scalar where a mapping is expected (e.g. `server: 8554` instead
+        # of `server: {rtsp_port: 8554}`) used to reach `set(raw)` below
+        # with `raw` being that scalar, raising a raw `TypeError` ("'int'
+        # object is not iterable") with no section context -- outside this
+        # function's own try/except, so it escaped `load_config` uncaught.
+        raise ConfigError(
+            f"{section!r} section must be a mapping of settings; found "
+            f"{type(raw).__name__} ({raw!r}) instead")
     valid = {f.name for f in dataclasses.fields(cls)}
     unknown = set(raw) - valid
     if unknown:
