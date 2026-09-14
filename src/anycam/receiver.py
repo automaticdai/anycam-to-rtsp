@@ -59,10 +59,28 @@ class CameraReceiver(threading.Thread):
         self._container_lock = threading.Lock()
         self._container: Any | None = None
 
-    def stop(self, timeout: float = 5.0) -> None:
+    def stop(self, timeout: float = 5.0) -> bool:
+        """Signal the thread to stop and wait up to `timeout` seconds for it.
+
+        Returns True if the thread actually exited within `timeout`, False
+        if the join timed out and the thread is still running — for example,
+        blocked inside a real `decode()` call, or inside the uninterruptible
+        window of `av.open()` before a container exists to close. On a False
+        return the thread keeps running in the background; a caller that
+        cares (Task 8's monitor, say) can act on that, but nothing requires
+        it to.
+        """
         self._stop_event.set()
         self._close_container()
         self.join(timeout=timeout)
+        if self.is_alive():
+            log.warning(
+                "%s: receiver thread did not stop within %.1fs; it is "
+                "still running in the background (likely blocked inside "
+                "a connect or decode call that could not be interrupted)",
+                self.camera_id, timeout)
+            return False
+        return True
 
     def force_reconnect(self) -> None:
         """Close the container so a blocked read raises and the loop retries.

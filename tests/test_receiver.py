@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 
@@ -219,3 +220,29 @@ def test_receiver_leaves_estimate_none_when_timing_is_unavailable():
     assert wait_for(lambda: rx.frames >= 2)
     rx.stop()
     assert rx.buffer.get().est_capture_ns is None
+
+
+def test_stop_reports_false_and_warns_when_the_thread_will_not_die(caplog):
+    # Simulates the uninterruptible-connect window: `stop()` cannot unblock
+    # this via `_close_container()`, because no container exists yet.
+    release = threading.Event()
+
+    def opener(url, options):
+        release.wait(timeout=5)
+        raise OSError("connect timed out")
+
+    rx = CameraReceiver("cam0", "rtsp://h/cam0", FAST, opener=opener)
+    rx.start()
+    wait_for(lambda: rx.is_alive())
+    try:
+        with caplog.at_level(logging.WARNING, logger="anycam.receiver"):
+            stopped = rx.stop(timeout=0.1)
+        assert stopped is False
+        assert rx.is_alive()
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("cam0" in r.getMessage() for r in warnings)
+    finally:
+        # Let the blocked opener return so the background thread can exit
+        # cleanly and not leak into other tests.
+        release.set()
+        rx.join(timeout=2.0)
