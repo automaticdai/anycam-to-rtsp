@@ -54,12 +54,24 @@ def test_buffer_depth_never_exceeds_one_under_a_slow_consumer(synthetic_stack):
 def test_client_reconnects_after_the_server_restarts(synthetic_stack):
     """The spec's layer-2 promise: when MediaMTX itself comes back after
     dying, every client reconnects and frames resume -- not merely that the
-    reconnect counter ticks up while the server stays dead."""
+    reconnect counter ticks up while the server stays dead.
+
+    `LatestFrameBuffer` is never cleared on reconnect, and `frame_id` never
+    resets either (it just keeps counting up for the receiver's whole
+    lifetime), so a baseline sampled before the kill can be beaten forever
+    by the one stale frame left sitting in the buffer -- even with the
+    server permanently dead. To make "frames resumed" mean something, the
+    buffer is drained with `take()` only *after* the reconnect counter has
+    already ticked up: by that point the old receiver's `_consume` loop has
+    necessarily already exited (that is what incremented `reconnects`), so
+    no frame from the dead connection can land in the buffer after this
+    `take()` -- only a frame decoded from a fresh connection can satisfy
+    the assertion below.
+    """
     config, proc, cfg_path = synthetic_stack
     with MultiCameraClient(config, host="127.0.0.1") as client:
         assert wait_for(lambda: client.latest("cam0") is not None)
         before_reconnects = client.stats()["cam0"].reconnects
-        before_frame_id = client.latest("cam0").frame_id
 
         proc.terminate()
         proc.wait(timeout=10)
@@ -69,10 +81,10 @@ def test_client_reconnects_after_the_server_restarts(synthetic_stack):
             assert wait_for(
                 lambda: client.stats()["cam0"].reconnects > before_reconnects,
                 timeout=20)
-            assert wait_for(
-                lambda: client.latest("cam0") is not None
-                and client.latest("cam0").frame_id > before_frame_id,
-                timeout=20)
+
+            client.take("cam0")
+            assert wait_for(lambda: client.latest("cam0") is not None,
+                            timeout=20)
         finally:
             _terminate(new_proc)
 
