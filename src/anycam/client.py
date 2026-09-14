@@ -89,9 +89,17 @@ class MultiCameraClient:
     def _run_monitor(self) -> None:
         """Force a reconnect on any stream whose watchdog has expired.
 
-        This cannot live inside the receiver: a wedged stream is blocked
-        inside a read that never returns, so only another thread can close
-        the container and unblock it.
+        A stream that stops producing data entirely is already handled
+        without this thread's help: `CameraReceiver`'s read timeout
+        (`READ_TIMEOUT_S`, passed to `av.open()`) aborts a blocked read on
+        its own and the receiver reconnects by itself. What only this
+        thread can catch is a stream that keeps delivering frames, just too
+        slowly to beat `watchdog_timeout_s` between them -- `_consume` only
+        beats the watchdog when a frame actually arrives, and the read
+        timeout never fires because data never stops arriving, so nothing
+        inside the receiver's own loop ever notices. This thread polls
+        every receiver's watchdog from outside and calls `force_reconnect()`
+        (a flag `_consume` checks once per decoded frame) to unstick it.
 
         Each camera's check is wrapped independently: this loop is the one
         place whose whole purpose is treating cameras independently, so it

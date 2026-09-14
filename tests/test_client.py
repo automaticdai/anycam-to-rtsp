@@ -30,12 +30,22 @@ class FakeContainer:
     (mirroring the `timeout` passed to real `av.open()`) rather than
     waiting to be closed externally -- nothing may close a real container
     from another thread any more (that was the segfault this fixture now
-    protects against), so a fake must not depend on that either."""
+    protects against), so a fake must not depend on that either.
 
-    def __init__(self, count=1000, stall_after=None, stall_timeout_s=0.3):
+    `frame_interval_s` paces yielded frames. The default (0.002s) is fast
+    enough not to slow most tests down; a value close to or above
+    `watchdog_timeout_s` instead simulates a camera that is alive and
+    delivering, just too slowly to beat the watchdog between frames -- the
+    one stall shape the read timeout cannot resolve on its own, because
+    data never actually stops arriving.
+    """
+
+    def __init__(self, count=1000, stall_after=None, stall_timeout_s=0.3,
+                 frame_interval_s=0.002):
         self._count = count
         self._stall_after = stall_after
         self._stall_timeout_s = stall_timeout_s
+        self._frame_interval_s = frame_interval_s
         self.closed = False
 
     def decode(self, video=0):
@@ -46,7 +56,7 @@ class FakeContainer:
                 time.sleep(self._stall_timeout_s)
                 raise TimeoutError("timed out waiting for data")
             yield FakeVideoFrame(pts=i * 3000)
-            time.sleep(0.002)
+            time.sleep(self._frame_interval_s)
 
     def close(self):
         self.closed = True
@@ -116,8 +126,15 @@ def test_one_dead_camera_does_not_affect_the_others():
         assert wait_for(lambda: client.latest("cam0").frame_id > healthy)
 
 
-def test_monitor_forces_reconnect_on_a_wedged_stream():
-    """A wedged camera holds a healthy connection; only the watchdog sees it."""
+def test_a_stalled_stream_self_recovers_via_the_read_timeout():
+    """A camera whose connection stops producing data entirely does not
+    need the monitor: CameraReceiver's own read timeout aborts the blocked
+    read and the receiver reconnects by itself, with the monitor's
+    watchdog check and force_reconnect() call never actually mattering to
+    the outcome (this test still passes with the monitor thread replaced
+    by a no-op). See test_monitor_reconnects_a_stream_that_is_too_slow_
+    for_the_watchdog below for the one stall shape that genuinely requires
+    the monitor."""
     cfg = app_config(1)
     cfg = AppConfig(server=cfg.server, cameras=cfg.cameras,
                     client=ClientConfig(watchdog_timeout_s=0.2))
@@ -125,6 +142,31 @@ def test_monitor_forces_reconnect_on_a_wedged_stream():
 
     def opener(url, options):
         c = FakeContainer(stall_after=2)
+        containers.append(c)
+        return c
+
+    with MultiCameraClient(cfg, host="h", opener=opener,
+                           monitor_interval_s=0.02) as client:
+        assert wait_for(lambda: len(containers) >= 2, timeout=5.0)
+        assert containers[0].closed
+        assert client.stats()["cam0"].reconnects >= 1
+
+
+def test_monitor_reconnects_a_stream_that_is_too_slow_for_the_watchdog():
+    """The one thing only the monitor can do: a stream that keeps
+    delivering frames, just slower than watchdog_timeout_s, never trips
+    the read timeout (data keeps arriving, just not fast enough) and never
+    raises on its own. `_consume` only beats the watchdog when a frame
+    actually arrives, so only watchdog expiry -> force_reconnect() -> the
+    flag `_consume` checks between frames can move this stream at all. With
+    `_run_monitor` replaced by a no-op loop, this reconnect never happens."""
+    cfg = app_config(1)
+    cfg = AppConfig(server=cfg.server, cameras=cfg.cameras,
+                    client=ClientConfig(watchdog_timeout_s=0.2))
+    containers = []
+
+    def opener(url, options):
+        c = FakeContainer(frame_interval_s=0.5)
         containers.append(c)
         return c
 
@@ -152,10 +194,15 @@ def test_stop_is_idempotent():
     client.stop()
 
 
-def test_monitor_reconnects_only_the_wedged_camera_among_healthy_peers():
-    """Isolation claim: force-reconnecting one wedged camera must not touch
-    its healthy peers, whose reconnect counts must stay unchanged throughout
-    and which must keep delivering fresh frames the whole time."""
+def test_a_stalled_camera_recovering_does_not_disturb_its_healthy_peers():
+    """Isolation claim: cam1 stalling and recovering on its own (via the
+    read timeout -- see test_a_stalled_stream_self_recovers_via_the_read_
+    timeout above for that mechanism by itself) must not touch its healthy
+    peers, whose reconnect counts must stay unchanged throughout and which
+    must keep delivering fresh frames the whole time. The monitor thread is
+    still running here and still polls every camera's watchdog each tick;
+    what this test proves is that doing so for a stalled cam1 has no
+    observable effect on cam0/cam2."""
     cfg = app_config(3)
     cfg = AppConfig(server=cfg.server, cameras=cfg.cameras,
                     client=ClientConfig(watchdog_timeout_s=0.2))
@@ -170,9 +217,9 @@ def test_monitor_reconnects_only_the_wedged_camera_among_healthy_peers():
         assert wait_for(lambda: client.latest("cam0") is not None
                          and client.latest("cam2") is not None)
 
-        # Poll continuously while cam1 is expected to wedge and get
-        # force-reconnected; assert the healthy peers' reconnect counts
-        # never move during that whole window, not just at the end.
+        # Poll continuously while cam1 is expected to stall and recover;
+        # assert the healthy peers' reconnect counts never move during
+        # that whole window, not just at the end.
         deadline = time.monotonic() + 3.0
         wedge_reconnected = False
         while time.monotonic() < deadline and not wedge_reconnected:

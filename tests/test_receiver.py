@@ -99,9 +99,11 @@ def test_default_opener_passes_open_and_read_timeouts(monkeypatch):
     assert seen["url"] == "rtsp://h/cam0"
     assert seen["options"] == LOW_LATENCY_OPTIONS
     assert seen["timeout"] == (OPEN_TIMEOUT_S, READ_TIMEOUT_S)
-    # Read timeout must stay comfortably under the default watchdog window,
-    # or a stalled read would never resolve itself before the watchdog does.
-    assert READ_TIMEOUT_S < ClientConfig().watchdog_timeout_s
+    # Read timeout must stay comfortably under the default watchdog window
+    # (encoded here as "at most half", not just "less than") -- otherwise a
+    # stalled read would resolve itself too close to when the watchdog
+    # would have acted anyway, defeating the point of the read timeout.
+    assert READ_TIMEOUT_S <= ClientConfig().watchdog_timeout_s / 2
 
 
 def test_opener_receives_url_and_low_latency_options():

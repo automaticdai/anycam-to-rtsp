@@ -42,8 +42,15 @@ LOW_LATENCY_OPTIONS: dict[str, str] = {
 # anything and ask the monitor thread to intervene.
 # OPEN_TIMEOUT_S bounds a connection attempt to a dead or unreachable host;
 # it is longer than the read timeout because a fresh TCP+RTSP handshake
-# legitimately takes longer than steady-state packet arrival.
-OPEN_TIMEOUT_S = 5.0
+# legitimately takes longer than steady-state packet arrival. It is also
+# kept comfortably under `CameraReceiver.stop()`'s default 5.0s join
+# timeout: a receiver blocked inside `av.open()` against a dead host must
+# still be able to notice `_stop_event` and exit within one `stop()` call,
+# not merely within one open-timeout cycle plus loop overhead, or `stop()`
+# would report `False` (and the client would log a "did not stop cleanly"
+# warning) on essentially every teardown that happens to catch a receiver
+# mid-connect.
+OPEN_TIMEOUT_S = 3.0
 READ_TIMEOUT_S = 1.0
 
 
