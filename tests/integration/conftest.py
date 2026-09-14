@@ -57,6 +57,31 @@ def _terminate(proc: subprocess.Popen) -> None:
         pass
 
 
+def _wait_until_listening(port: int, timeout: float = 15) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return True
+        except OSError:
+            time.sleep(0.2)
+    return False
+
+
+def _start_mediamtx(cfg_path, port: int) -> subprocess.Popen:
+    """Start mediamtx against `cfg_path` and wait for it to listen on
+    `port`. Shared by the fixture (initial start) and any test that needs
+    to restart the server mid-test (e.g. after simulating a crash)."""
+    proc = subprocess.Popen([shutil.which("mediamtx"), str(cfg_path)],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            start_new_session=True)
+    if not _wait_until_listening(port):
+        _terminate(proc)
+        pytest.fail(f"mediamtx did not listen on {port}")
+    return proc
+
+
 @pytest.fixture
 def synthetic_stack(binaries, tmp_path):
     """Two synthetic cameras published through a real MediaMTX instance.
@@ -90,23 +115,9 @@ def synthetic_stack(binaries, tmp_path):
     cfg_path.write_text(yaml.safe_dump(doc, sort_keys=False,
                                        default_flow_style=False))
 
-    proc = subprocess.Popen([shutil.which("mediamtx"), str(cfg_path)],
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                            start_new_session=True)
-
-    deadline = time.monotonic() + 15
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-                break
-        except OSError:
-            time.sleep(0.2)
-    else:
-        _terminate(proc)
-        pytest.fail(f"mediamtx did not listen on {port}")
+    proc = _start_mediamtx(cfg_path, port)
 
     try:
-        yield config, proc
+        yield config, proc, cfg_path
     finally:
         _terminate(proc)
