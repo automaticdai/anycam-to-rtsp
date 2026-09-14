@@ -29,3 +29,16 @@ def test_attempts_counts_delays_since_reset():
     assert b.attempts == 2
     b.reset()
     assert b.attempts == 0
+
+
+def test_no_overflow_after_many_calls():
+    """Regression: _attempts must not overflow. Clamped exponent prevents it."""
+    b = Backoff(CFG)
+    # Saturate the backoff (delays reach max_s after ~5 attempts)
+    for _ in range(6):
+        b.next_delay()
+    # Without the fix, this would raise OverflowError around attempt ~1024
+    # Now continue for many more calls and verify no exception
+    for _ in range(2000):
+        delay = b.next_delay()
+        assert delay == 5.0  # Should remain capped at max_s
