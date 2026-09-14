@@ -129,6 +129,7 @@ freshest frame rather than a backlog.
 | One camera dead, the others fine | Working as designed — cameras are fully independent. Check that one's device name. |
 | All cameras stutter, the last one worst | USB bandwidth. Four 1080p30 MJPEG streams is ~24 MB/s against ~35 MB/s on one USB 2.0 controller. In Device Manager use *View → Devices by connection* and spread them across root hubs. |
 | MediaMTX exits immediately on start | It aborts on unknown config keys. Make sure `bin\mediamtx.exe` is v1.9.3 — a newer release renamed keys this generator emits. |
+| `CUDA_ERROR_NO_DEVICE`, `cuvid decode callback error` | The GPU MJPEG decoder cannot open your camera. Run `.\generate.ps1 -NoHwMjpeg` and restart. This happens even on machines with a working NVIDIA GPU and a working `h264_nvenc` encoder — see below. |
 
 ## No NVIDIA GPU
 
@@ -149,3 +150,29 @@ capture timestamp is taken when the frame reaches software, already tens of
 milliseconds after light hit the sensor. Point a camera at a millisecond clock
 on screen and compare; `tools/calibrate_latency.py` in the main repo automates
 the capture half. `docs/bench-checklist.md` has the full procedure.
+
+## When `mjpeg_cuvid` is listed but does not work
+
+`setup.ps1` reports whether your ffmpeg build *lists* `mjpeg_cuvid`. That is
+not the same as it working. On at least one RTX 5080 machine it decodes MJPEG
+*files* correctly and still fails against a live DirectShow camera with:
+
+    CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+    cuvid decode callback error
+
+on that same machine `h264_nvenc` encodes fine and `nvidia-smi` is healthy, so
+this is specific to the CUVID decoder opening a capture device, not a broken
+GPU or driver.
+
+The fix is one flag:
+
+```powershell
+.\generate.ps1 -NoHwMjpeg
+.\start.ps1
+```
+
+What you give up is small. The camera already delivers MJPEG, so the choice is
+only *where* that MJPEG is decoded before being encoded to H.264. On the GPU
+the frame never leaves VRAM; on the CPU it costs roughly 5 ms per 1080p frame
+per camera — negligible for one or two cameras, around half a core for four.
+**Encoding stays on the GPU either way**, which is the expensive half.

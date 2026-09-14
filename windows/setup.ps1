@@ -225,10 +225,15 @@ if ($encoders -match 'h264_nvenc') {
 }
 
 if ($decoders -match 'mjpeg_cuvid') {
-    Write-Ok 'mjpeg_cuvid present (MJPEG decodes on the GPU, no host copy)'
+    Write-Ok 'mjpeg_cuvid is listed by this build'
+    Write-Warn 'Listed is not the same as working. On some systems it decodes'
+    Write-Warn 'files fine but fails against a live DirectShow camera with'
+    Write-Warn 'CUDA_ERROR_NO_DEVICE, even with a working NVIDIA GPU and a'
+    Write-Warn 'working h264_nvenc encoder. If start.ps1 shows CUDA errors,'
+    Write-Warn 'regenerate with:  .\generate.ps1 -NoHwMjpeg'
 } else {
-    Write-Warn 'mjpeg_cuvid NOT found. Run generate.ps1 -NoHwMjpeg to fall back'
-    Write-Warn 'to CPU MJPEG decoding.'
+    Write-Warn 'mjpeg_cuvid NOT listed. Run generate.ps1 -NoHwMjpeg to use CPU'
+    Write-Warn 'MJPEG decoding.'
 }
 
 Write-Host ''

@@ -47,4 +47,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ''
+if ($NoHwMjpeg) {
+    Write-Host 'MJPEG will be decoded on the CPU (-NoHwMjpeg).' -ForegroundColor Cyan
+} else {
+    Write-Host 'MJPEG will be decoded on the GPU via mjpeg_cuvid.' -ForegroundColor Cyan
+    Write-Host 'If start.ps1 logs CUDA_ERROR_NO_DEVICE or cuvid decode errors,' -ForegroundColor Yellow
+    Write-Host 'that decoder cannot open your camera. Re-run:' -ForegroundColor Yellow
+    Write-Host '    .\generate.ps1 -NoHwMjpeg' -ForegroundColor Yellow
+    Write-Host 'Encoding still uses the GPU either way; only the decode moves.' -ForegroundColor Yellow
+}
+Write-Host ''
 Write-Host 'Now run:  .\start.ps1' -ForegroundColor Cyan
