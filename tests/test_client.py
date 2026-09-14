@@ -1,5 +1,4 @@
 import logging
-import threading
 import time
 
 from anycam.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
@@ -26,25 +25,31 @@ class FakeVideoFrame:
 
 
 class FakeContainer:
-    def __init__(self, count=1000, stall_after=None):
+    """`stall_after` simulates a wedged camera: a healthy connection that
+    simply stops producing frames. It times out and raises on its own
+    (mirroring the `timeout` passed to real `av.open()`) rather than
+    waiting to be closed externally -- nothing may close a real container
+    from another thread any more (that was the segfault this fixture now
+    protects against), so a fake must not depend on that either."""
+
+    def __init__(self, count=1000, stall_after=None, stall_timeout_s=0.3):
         self._count = count
         self._stall_after = stall_after
+        self._stall_timeout_s = stall_timeout_s
         self.closed = False
-        self._released = threading.Event()
 
     def decode(self, video=0):
         for i in range(self._count):
             if self.closed:
                 return
             if self._stall_after is not None and i >= self._stall_after:
-                self._released.wait(timeout=10)
-                raise OSError("closed while stalled")
+                time.sleep(self._stall_timeout_s)
+                raise TimeoutError("timed out waiting for data")
             yield FakeVideoFrame(pts=i * 3000)
             time.sleep(0.002)
 
     def close(self):
         self.closed = True
-        self._released.set()
 
 
 def wait_for(predicate, timeout=3.0):

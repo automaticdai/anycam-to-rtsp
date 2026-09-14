@@ -3,7 +3,8 @@ import threading
 import time
 
 from anycam.config import ClientConfig
-from anycam.receiver import LOW_LATENCY_OPTIONS, CameraReceiver
+from anycam.receiver import (LOW_LATENCY_OPTIONS, OPEN_TIMEOUT_S,
+                             READ_TIMEOUT_S, CameraReceiver, default_opener)
 
 
 class FakeVideoFrame:
@@ -15,28 +16,42 @@ class FakeVideoFrame:
 
 
 class FakeContainer:
-    """Yields `count` frames, then behaves per `then`: 'end' | 'hang' | 'raise'."""
+    """Yields `count` frames, then behaves per `then`: 'end' | 'hang' | 'raise'.
 
-    def __init__(self, count=3, then="end"):
+    'hang' simulates a read that stops producing data and times out on its
+    own, mirroring the `timeout` passed to real `av.open()` — nothing may
+    close a real container from another thread any more (that was the
+    segfault this fixture now protects against), so a fake must not depend
+    on an external `close()` to unblock its own 'hang' branch either.
+
+    `frame_delay_s` optionally paces yields, giving a test a window to call
+    `force_reconnect()` (or otherwise act) while the container is still
+    actively producing frames, rather than racing to exhaust `count` first.
+    """
+
+    def __init__(self, count=3, then="end", read_timeout_s=0.05,
+                 frame_delay_s=0.0):
         self._count = count
         self._then = then
+        self._read_timeout_s = read_timeout_s
+        self._frame_delay_s = frame_delay_s
         self.closed = False
-        self._released = threading.Event()
 
     def decode(self, video=0):
         for i in range(self._count):
             if self.closed:
                 return
+            if self._frame_delay_s:
+                time.sleep(self._frame_delay_s)
             yield FakeVideoFrame(pts=i * 3000)
         if self._then == "raise":
             raise OSError("stream broke")
         if self._then == "hang":
-            self._released.wait(timeout=5)
-            raise OSError("closed while blocked")
+            time.sleep(self._read_timeout_s)
+            raise TimeoutError("timed out waiting for data")
 
     def close(self):
         self.closed = True
-        self._released.set()
 
 
 def wait_for(predicate, timeout=2.0):
@@ -61,6 +76,32 @@ def test_low_latency_options_match_spec():
         "reorder_queue_size": "0",
         "max_delay": "0",
     }
+
+
+def test_default_opener_passes_open_and_read_timeouts(monkeypatch):
+    """The AVIOInterruptCB mechanism (PyAV's `timeout` kwarg) is what
+    replaces closing a container from another thread -- confirm it is
+    actually wired through, not just documented in a comment."""
+    seen = {}
+
+    def fake_av_open(url, options=None, timeout=None):
+        seen["url"] = url
+        seen["options"] = options
+        seen["timeout"] = timeout
+        return "sentinel-container"
+
+    import av
+    monkeypatch.setattr(av, "open", fake_av_open)
+
+    result = default_opener("rtsp://h/cam0", LOW_LATENCY_OPTIONS)
+
+    assert result == "sentinel-container"
+    assert seen["url"] == "rtsp://h/cam0"
+    assert seen["options"] == LOW_LATENCY_OPTIONS
+    assert seen["timeout"] == (OPEN_TIMEOUT_S, READ_TIMEOUT_S)
+    # Read timeout must stay comfortably under the default watchdog window,
+    # or a stalled read would never resolve itself before the watchdog does.
+    assert READ_TIMEOUT_S < ClientConfig().watchdog_timeout_s
 
 
 def test_opener_receives_url_and_low_latency_options():
@@ -134,18 +175,45 @@ def test_backoff_resets_after_a_successful_frame():
     assert rx.backoff.attempts <= 1
 
 
-def test_force_reconnect_closes_a_hung_container():
+def test_a_stalled_read_times_out_and_reconnects_on_its_own():
+    """A read that stops producing data must unblock itself via its own
+    timeout — nothing may close the container from another thread to
+    unblock it (that mechanism caused a real segfault against real PyAV
+    and was replaced by the `timeout` passed to `av.open()`)."""
     containers = []
 
     def opener(url, options):
-        c = FakeContainer(count=1, then="hang")
+        c = FakeContainer(count=1, then="hang", read_timeout_s=0.05)
         containers.append(c)
         return c
 
     rx = CameraReceiver("cam0", "rtsp://h/cam0", FAST, opener=opener)
     rx.start()
     assert wait_for(lambda: rx.frames >= 1)
+    assert wait_for(lambda: containers[0].closed)
+    assert wait_for(lambda: len(containers) >= 2)
+    rx.stop()
+
+
+def test_force_reconnect_abandons_the_container_between_frames():
+    """force_reconnect() sets a flag `_consume` checks once per decoded
+    frame — proven here against a container that is actively producing
+    frames (never blocked), which is the only case this flag can help:
+    a container's own thread closes it, cleanly, once the flag is seen."""
+    containers = []
+
+    def opener(url, options):
+        c = FakeContainer(count=100_000, then="end", frame_delay_s=0.002)
+        containers.append(c)
+        return c
+
+    rx = CameraReceiver("cam0", "rtsp://h/cam0", FAST, opener=opener)
+    rx.start()
+    assert wait_for(lambda: rx.frames >= 3)
     rx.force_reconnect()
+    # At 0.002s/frame, exhausting 100,000 frames would take ~200s -- far
+    # past this test's timeout, so a close/reconnect this fast proves the
+    # container was abandoned via the flag, not run to natural completion.
     assert wait_for(lambda: containers[0].closed)
     assert wait_for(lambda: len(containers) >= 2)
     rx.stop()
@@ -223,8 +291,11 @@ def test_receiver_leaves_estimate_none_when_timing_is_unavailable():
 
 
 def test_stop_reports_false_and_warns_when_the_thread_will_not_die(caplog):
-    # Simulates the uninterruptible-connect window: `stop()` cannot unblock
-    # this via `_close_container()`, because no container exists yet.
+    # Simulates a connect that ignores its own open timeout entirely (a
+    # fake, unlike real `av.open()`, has no AVIOInterruptCB of its own):
+    # `stop()` no longer tries to unblock this by closing anything — a
+    # container is only ever closed by the thread that owns it, and here
+    # there isn't one yet — so it can only wait and report False.
     release = threading.Event()
 
     def opener(url, options):

@@ -26,10 +26,31 @@ LOW_LATENCY_OPTIONS: dict[str, str] = {
     "max_delay": "0",
 }
 
+# Passed to PyAV's `timeout=(open, read)` kwarg, which wires FFmpeg's
+# AVIOInterruptCB -- the mechanism FFmpeg provides for aborting a blocked I/O
+# call from the SAME thread that issued it. This replaces closing the
+# container from another thread to unblock a wedged read: that is a
+# use-after-free against a real AVFormatContext (confirmed by a real
+# segfault under Task 10's integration suite), not just a documented risk,
+# so no thread other than the one running `decode()` may touch a container
+# once it is open.
+#
+# READ_TIMEOUT_S bounds how long a blocked read can go without data before
+# raising on its own. It is kept well under ClientConfig's default
+# `watchdog_timeout_s` (2.0s) so a stalled read unblocks and this thread has
+# already reconnected before the watchdog would otherwise need to notice
+# anything and ask the monitor thread to intervene.
+# OPEN_TIMEOUT_S bounds a connection attempt to a dead or unreachable host;
+# it is longer than the read timeout because a fresh TCP+RTSP handshake
+# legitimately takes longer than steady-state packet arrival.
+OPEN_TIMEOUT_S = 5.0
+READ_TIMEOUT_S = 1.0
+
 
 def default_opener(url: str, options: dict[str, str]) -> Any:
     import av
-    return av.open(url, options=options)
+    return av.open(url, options=options,
+                   timeout=(OPEN_TIMEOUT_S, READ_TIMEOUT_S))
 
 
 class CameraReceiver(threading.Thread):
@@ -56,51 +77,60 @@ class CameraReceiver(threading.Thread):
         self._opener = opener
         self._clock = clock
         self._stop_event = threading.Event()
-        self._container_lock = threading.Lock()
-        self._container: Any | None = None
+        self._reconnect_requested = threading.Event()
 
     def stop(self, timeout: float = 5.0) -> bool:
         """Signal the thread to stop and wait up to `timeout` seconds for it.
 
         Returns True if the thread actually exited within `timeout`, False
-        if the join timed out and the thread is still running — for example,
-        blocked inside a real `decode()` call, or inside the uninterruptible
-        window of `av.open()` before a container exists to close. On a False
-        return the thread keeps running in the background; a caller that
-        cares (Task 8's monitor, say) can act on that, but nothing requires
-        it to.
+        if the join timed out and the thread is still running — for example
+        blocked inside `av.open()`'s own open timeout while connecting to an
+        unresponsive host, or inside `decode()` until its read timeout
+        elapses. On a False return the thread keeps running in the
+        background; a caller that cares (Task 8's monitor, say) can act on
+        that, but nothing requires it to.
+
+        This never touches the container: only the thread running `run()`
+        may open, read from or close it (see `run()` and `force_reconnect()`
+        for why).
         """
         self._stop_event.set()
-        self._close_container()
         self.join(timeout=timeout)
         if self.is_alive():
             log.warning(
                 "%s: receiver thread did not stop within %.1fs; it is "
                 "still running in the background (likely blocked inside "
-                "a connect or decode call that could not be interrupted)",
+                "a connect or decode call whose own timeout has not yet "
+                "elapsed)",
                 self.camera_id, timeout)
             return False
         return True
 
     def force_reconnect(self) -> None:
-        """Close the container so a blocked read raises and the loop retries.
+        """Ask the consume loop to abandon its container and reconnect.
 
-        A wedged stream cannot be interrupted from inside the decode loop,
-        because the read never returns. Closing from outside is what unblocks
-        it, which is why the watchdog lives outside this thread.
+        Sets a flag that `_consume` checks once per decoded frame — this
+        only helps a container that is actively producing frames. It cannot
+        unblock a read that has stopped producing anything at all, because
+        there is no iteration on which to check a flag; that case is instead
+        bounded by the read timeout passed to `av.open()` (`READ_TIMEOUT_S`),
+        so a genuinely wedged read aborts itself without anyone closing it.
+
+        Closing a container from any thread other than the one running its
+        `decode()` loop is a use-after-free against a real AVFormatContext,
+        so this deliberately never touches the container itself.
         """
         log.warning("%s: forcing reconnect", self.camera_id)
-        self._close_container()
+        self._reconnect_requested.set()
 
-    def _close_container(self) -> None:
-        with self._container_lock:
-            container, self._container = self._container, None
-        if container is not None:
-            try:
-                container.close()
-            except Exception:
-                log.debug("%s: error closing container", self.camera_id,
-                          exc_info=True)
+    def _close(self, container: Any) -> None:
+        """Close `container`. Only ever called from `run()`, i.e. only ever
+        by the thread that opened and has been reading this container."""
+        try:
+            container.close()
+        except Exception:
+            log.debug("%s: error closing container", self.camera_id,
+                      exc_info=True)
 
     def run(self) -> None:
         while not self._stop_event.is_set():
@@ -112,15 +142,14 @@ class CameraReceiver(threading.Thread):
                 self._wait(self.backoff.next_delay())
                 continue
 
-            with self._container_lock:
-                self._container = container
+            self._reconnect_requested.clear()
             try:
                 self._consume(container)
             except Exception as exc:
                 self.last_error = str(exc)
                 log.info("%s: stream ended: %s", self.camera_id, exc)
             finally:
-                self._close_container()
+                self._close(container)
 
             if not self._stop_event.is_set():
                 self.reconnects += 1
@@ -129,7 +158,7 @@ class CameraReceiver(threading.Thread):
     def _consume(self, container: Any) -> None:
         start_realtime, time_base = _sender_clock(container)
         for decoded in container.decode(video=0):
-            if self._stop_event.is_set():
+            if self._stop_event.is_set() or self._reconnect_requested.is_set():
                 return
             recv_ns = self._clock()
             image = decoded.to_ndarray(format="bgr24")

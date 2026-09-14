@@ -1,9 +1,12 @@
+import os
 import shutil
+import signal
 import socket
 import subprocess
 import time
 
 import pytest
+import yaml
 
 from anycam.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
                            ServerConfig, SourceConfig, VideoConfig)
@@ -22,6 +25,36 @@ def binaries():
     if missing:
         pytest.skip(f"missing binaries: {', '.join(missing)}")
     return True
+
+
+def _terminate(proc: subprocess.Popen) -> None:
+    """Stop `proc` and its whole process group, escalating if it won't die.
+
+    `synthetic_stack` starts mediamtx with `start_new_session=True`, putting
+    it (and, transitively, the ffmpeg children it spawns via runOnInit) in
+    their own process group, so a mediamtx that does not shepherd its own
+    children out in time can still be reaped in one shot. This is a normal-
+    teardown safety net only: nothing can run this code if the test process
+    itself is killed (e.g. a segfault) before reaching it, which is why the
+    fixture also gives this instance non-default ports below -- so a leaked
+    process from a crashed run has nothing fixed to collide on next time.
+    """
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        proc.kill()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 @pytest.fixture
@@ -43,9 +76,24 @@ def synthetic_stack(binaries, tmp_path):
 
     cfg_path = write_mediamtx_config(config, tmp_path / "mediamtx.yml",
                                      hw_mjpeg_decode=False)
+
+    # render_mediamtx_config disables RTMP/HLS/SRT outright (this system
+    # never uses them), but leaves WebRTC on at MediaMTX's fixed default
+    # ports (8889 HTTP, 8189 ICE/UDP) since the design relies on it for
+    # browser inspection. Only one process on this host can ever bind those
+    # at a time, so give this instance its own free ports instead -- a
+    # leftover mediamtx from an earlier crashed run (or a second test
+    # worker) must not be able to collide with this one.
+    doc = yaml.safe_load(cfg_path.read_text())
+    doc["webrtcAddress"] = f":{free_port()}"
+    doc["webrtcLocalUDPAddress"] = f":{free_port()}"
+    cfg_path.write_text(yaml.safe_dump(doc, sort_keys=False,
+                                       default_flow_style=False))
+
     proc = subprocess.Popen([shutil.which("mediamtx"), str(cfg_path)],
                             stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
+                            stderr=subprocess.DEVNULL,
+                            start_new_session=True)
 
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
@@ -55,14 +103,10 @@ def synthetic_stack(binaries, tmp_path):
         except OSError:
             time.sleep(0.2)
     else:
-        proc.terminate()
+        _terminate(proc)
         pytest.fail(f"mediamtx did not listen on {port}")
 
     try:
         yield config, proc
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        _terminate(proc)

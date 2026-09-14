@@ -44,3 +44,15 @@ def test_software_fallback_propagates_to_generated_commands():
     doc = yaml.safe_load(
         render_mediamtx_config(app_config(), hw_mjpeg_decode=False))
     assert "mjpeg_cuvid" not in doc["paths"]["cam0"]["runOnInit"]
+
+
+def test_unused_protocols_are_disabled_but_webrtc_stays_on():
+    """This system publishes and consumes RTSP only. RTMP/HLS/SRT each bind
+    a fixed default port regardless of rtspAddress, so leaving them enabled
+    lets an orphaned MediaMTX process squat on those ports and break the
+    next instance's startup. WebRTC stays on for browser inspection."""
+    doc = yaml.safe_load(render_mediamtx_config(app_config()))
+    assert doc["rtmp"] is False
+    assert doc["hls"] is False
+    assert doc["srt"] is False
+    assert doc["webrtc"] is True

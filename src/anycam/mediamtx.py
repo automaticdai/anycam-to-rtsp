@@ -30,6 +30,19 @@ def render_mediamtx_config(config: AppConfig, *,
         "rtspAddress": f":{config.server.rtsp_port}",
         "protocols": ["tcp"],
         "logLevel": "info",
+        # This system publishes and consumes RTSP only. RTMP/HLS/SRT each
+        # bind their own fixed default port (1935/8888/8890) regardless of
+        # rtspAddress, so leaving them enabled means an orphaned MediaMTX
+        # process (e.g. from a crashed client) squats on those ports and
+        # breaks the next instance's startup with a misleading bind error.
+        # WebRTC stays enabled: the design relies on it for browser
+        # inspection of a camera. A caller running more than one instance
+        # at once (e.g. the integration test fixture) is responsible for
+        # giving it non-default, non-colliding ports.
+        "rtmp": False,
+        "hls": False,
+        "srt": False,
+        "webrtc": True,
         "paths": paths,
     }
     return yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
