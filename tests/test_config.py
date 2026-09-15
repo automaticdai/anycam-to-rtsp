@@ -1,5 +1,5 @@
 import pytest
-from anycam.config import load_config, ConfigError
+from anycam2rtsp.config import load_config, ConfigError
 
 
 def write(tmp_path, text):

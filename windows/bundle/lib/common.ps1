@@ -1,4 +1,4 @@
-# Shared helpers for the anycam Windows scripts. Dot-sourced, not run directly.
+# Shared helpers for the anycam2rtsp Windows scripts. Dot-sourced, not run directly.
 #
 # Two hard-won rules live here:
 #

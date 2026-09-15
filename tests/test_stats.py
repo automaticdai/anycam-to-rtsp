@@ -1,4 +1,4 @@
-from anycam.stats import StreamStats
+from anycam2rtsp.stats import StreamStats
 
 
 def test_format_line_includes_the_silent_failure_signals():
@@ -27,7 +27,7 @@ def test_healthy_stream_is_not_stalled():
 
 def test_format_line_renders_last_error_when_set():
     """last_error is collected but was previously silently dropped by
-    format_line -- the one place `anycam watch` renders it for a human."""
+    format_line -- the one place `anycam2rtsp watch` renders it for a human."""
     stats = StreamStats(camera_id="cam0", frames=0, dropped=0, reconnects=3,
                         age_s=9.5, depth=0,
                         last_error="OSError: camera 1 is unplugged")

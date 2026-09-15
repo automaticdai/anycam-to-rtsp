@@ -1,14 +1,14 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  One-time setup for the anycam-to-rtsp Windows capture host.
+  One-time setup for the anycam2rtsp Windows capture host.
 
 .DESCRIPTION
-  Creates a local Python venv, installs the bundled anycam package, and
+  Creates a local Python venv, installs the bundled anycam2rtsp package, and
   fetches ffmpeg and MediaMTX into .\bin. Nothing is installed system-wide
   and no administrator rights are needed. Re-running is safe.
 
-  Only the capture half runs here. The consumer (anycam watch) runs in WSL
+  Only the capture half runs here. The consumer (anycam2rtsp watch) runs in WSL
   or on another Linux host and is not installed by this script.
 #>
 [CmdletBinding()]
@@ -133,12 +133,12 @@ $VenvPython = Join-Path $VenvDir 'Scripts\python.exe'
 # --no-deps to keep large, irrelevant wheels off this machine. Verified: the
 # `serve-config` and `devices` paths import neither (both are lazy imports
 # inside the consumer code path).
-Write-Step 'Installing the anycam package (capture half only)'
+Write-Step 'Installing the anycam2rtsp package (capture half only)'
 & $VenvPython -m pip install --quiet --upgrade pip
 & $VenvPython -m pip install --quiet 'PyYAML>=6.0'
 if ($LASTEXITCODE -ne 0) { throw 'Failed to install PyYAML.' }
 & $VenvPython -m pip install --quiet --no-deps -e $Root
-if ($LASTEXITCODE -ne 0) { throw 'Failed to install the anycam package.' }
+if ($LASTEXITCODE -ne 0) { throw 'Failed to install the anycam2rtsp package.' }
 Write-Ok 'Installed (PyYAML only; PyAV and NumPy deliberately skipped)'
 
 if ($SkipBinaries) {
@@ -150,7 +150,7 @@ if ($SkipBinaries) {
 
 # --- binaries -------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("anycam-" + [guid]::NewGuid().ToString('N'))
+$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("anycam2rtsp-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 
 try {
@@ -245,4 +245,4 @@ Write-Host '  2. notepad config.yaml        put those names in'
 Write-Host '  3. .\generate.ps1             build mediamtx.yml from config.yaml'
 Write-Host '  4. .\start.ps1                run the server'
 Write-Host ''
-Write-Host 'Then from WSL or your Linux host:  anycam watch -c config.yaml'
+Write-Host 'Then from WSL or your Linux host:  anycam2rtsp watch -c config.yaml'

@@ -61,7 +61,7 @@ def _devices(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="anycam")
+    parser = argparse.ArgumentParser(prog="anycam2rtsp")
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
 

@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from anycam.config import ConfigError, load_config  # noqa: E402
+from anycam2rtsp.config import ConfigError, load_config  # noqa: E402
 
 
 def main() -> int:

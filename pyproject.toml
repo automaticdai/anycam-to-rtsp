@@ -1,5 +1,5 @@
 [project]
-name = "anycam-to-rtsp"
+name = "anycam2rtsp"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = ["av>=12.0", "PyYAML>=6.0", "numpy>=1.26"]
@@ -9,7 +9,7 @@ dev = ["pytest>=8.0"]
 calibration = ["opencv-python>=4.9"]
 
 [project.scripts]
-anycam = "anycam.cli:main"
+anycam2rtsp = "anycam2rtsp.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]

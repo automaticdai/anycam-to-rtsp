@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Build the portable Windows bundle: dist/anycam-windows.zip
+# Build the portable Windows bundle: dist/anycam2rtsp-windows.zip
 #
 # Everything under windows/bundle/ ships, verbatim. That is deliberate: this
 # script used to cherry-pick `windows/*.ps1`, which silently dropped a helper
 # added later because it was not a .ps1 file. A directory cannot forget.
 #
-# The bundle also carries the anycam package rather than a reimplementation of
-# the config generator: the ffmpeg command builder escapes device names for
+# The bundle also carries the anycam2rtsp package rather than a reimplementation
+# of the config generator: the ffmpeg command builder escapes device names for
 # MediaMTX's argument parser, and a second implementation would drift from it.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUNDLE="$ROOT/windows/bundle"
 STAGE="$(mktemp -d)"
-OUT="$ROOT/dist/anycam-windows.zip"
-NAME="anycam-windows"
+OUT="$ROOT/dist/anycam2rtsp-windows.zip"
+NAME="anycam2rtsp-windows"
 
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -24,7 +24,7 @@ cp -r "$BUNDLE"/. "$STAGE/$NAME/"
 # The capture half needs the package, but not the consumer's dependencies --
 # setup.ps1 installs it with --no-deps plus PyYAML.
 mkdir -p "$STAGE/$NAME/src"
-cp -r "$ROOT/src/anycam" "$STAGE/$NAME/src/"
+cp -r "$ROOT/src/anycam2rtsp" "$STAGE/$NAME/src/"
 cp "$ROOT/pyproject.toml" "$STAGE/$NAME/"
 cp "$ROOT/config.example.yaml" "$STAGE/$NAME/"
 
@@ -32,7 +32,7 @@ find "$STAGE/$NAME" -name '__pycache__' -type d -prune -exec rm -rf {} +
 find "$STAGE/$NAME" -name '*.pyc' -delete
 
 cat > "$STAGE/$NAME/START-HERE.txt" <<'TXT'
-anycam-to-rtsp - Windows capture host
+anycam2rtsp - Windows capture host
 
 1. Open PowerShell in this folder.
 2. If scripts are blocked:

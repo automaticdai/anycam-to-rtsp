@@ -32,9 +32,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from anycam.client import MultiCameraClient          # noqa: E402
-from anycam.config import load_config                # noqa: E402
-from anycam.host import discover_windows_host        # noqa: E402
+from anycam2rtsp.client import MultiCameraClient          # noqa: E402
+from anycam2rtsp.config import load_config                # noqa: E402
+from anycam2rtsp.host import discover_windows_host        # noqa: E402
 
 
 def display() -> int:

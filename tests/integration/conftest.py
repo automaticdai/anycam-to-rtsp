@@ -8,9 +8,9 @@ import time
 import pytest
 import yaml
 
-from anycam.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
+from anycam2rtsp.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
                            ServerConfig, SourceConfig, VideoConfig)
-from anycam.mediamtx import write_mediamtx_config
+from anycam2rtsp.mediamtx import write_mediamtx_config
 
 
 def free_port():

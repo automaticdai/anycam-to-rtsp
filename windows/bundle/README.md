@@ -1,8 +1,8 @@
-# anycam-to-rtsp — Windows capture host
+# anycam2rtsp — Windows capture host
 
-This bundle is the **capture half** of anycam-to-rtsp. It runs on the Windows
+This bundle is the **capture half** of anycam2rtsp. It runs on the Windows
 machine the cameras are plugged into, and serves each camera as its own RTSP
-stream. The consumer — `anycam watch`, or your own inference code — runs in
+stream. The consumer — `anycam2rtsp watch`, or your own inference code — runs in
 WSL or on another Linux host and is not installed by this bundle.
 
 ```
@@ -47,7 +47,7 @@ encoding work, and anything failing on the WSL side is networking.
 To consume it, in WSL:
 
 ```bash
-anycam watch -c config.yaml
+anycam2rtsp watch -c config.yaml
 ```
 
 `depth=1` with `dropped` climbing is *correct* — it means you are getting the

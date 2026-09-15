@@ -1,4 +1,4 @@
-from anycam.watchdog import Watchdog
+from anycam2rtsp.watchdog import Watchdog
 
 
 class FakeClock:

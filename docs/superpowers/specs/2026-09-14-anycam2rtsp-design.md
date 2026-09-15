@@ -1,4 +1,4 @@
-# anycam-to-rtsp — Design
+# anycam2rtsp — Design
 
 **Date:** 2026-09-14
 **Status:** Approved design, pending implementation plan

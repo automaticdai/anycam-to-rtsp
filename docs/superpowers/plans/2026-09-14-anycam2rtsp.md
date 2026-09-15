@@ -1,4 +1,4 @@
-# anycam-to-rtsp Implementation Plan
+# anycam2rtsp Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.12, PyAV, PyYAML, NumPy, pytest; ffmpeg + MediaMTX as external binaries.
 
-**Spec:** `docs/superpowers/specs/2026-09-14-anycam-to-rtsp-design.md`
+**Spec:** `docs/superpowers/specs/2026-09-14-anycam2rtsp-design.md`
 
 ## Global Constraints
 
@@ -33,9 +33,9 @@
 
 **Files:**
 - Create: `pyproject.toml`
-- Create: `src/anycam/__init__.py`
-- Create: `src/anycam/frame.py`
-- Create: `src/anycam/config.py`
+- Create: `src/anycam2rtsp/__init__.py`
+- Create: `src/anycam2rtsp/frame.py`
+- Create: `src/anycam2rtsp/config.py`
 - Create: `config.example.yaml`
 - Test: `tests/test_config.py`
 
@@ -46,15 +46,15 @@
 - [ ] **Step 1: Create the project skeleton**
 
 ```bash
-mkdir -p src/anycam tests/integration tools docs
-touch src/anycam/__init__.py tests/__init__.py
+mkdir -p src/anycam2rtsp tests/integration tools docs
+touch src/anycam2rtsp/__init__.py tests/__init__.py
 ```
 
 `pyproject.toml`:
 
 ```toml
 [project]
-name = "anycam-to-rtsp"
+name = "anycam2rtsp"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = ["av>=12.0", "PyYAML>=6.0", "numpy>=1.26"]
@@ -63,7 +63,7 @@ dependencies = ["av>=12.0", "PyYAML>=6.0", "numpy>=1.26"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-anycam = "anycam.cli:main"
+anycam2rtsp = "anycam2rtsp.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -87,7 +87,7 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
 ```python
 import pytest
-from anycam.config import load_config, ConfigError
+from anycam2rtsp.config import load_config, ConfigError
 
 
 def write(tmp_path, text):
@@ -171,11 +171,11 @@ def test_rejects_zero_cameras(tmp_path):
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_config.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'anycam.config'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'anycam2rtsp.config'`
 
 - [ ] **Step 4: Implement `Frame`**
 
-`src/anycam/frame.py`:
+`src/anycam2rtsp/frame.py`:
 
 ```python
 from __future__ import annotations
@@ -203,7 +203,7 @@ class Frame:
 
 - [ ] **Step 5: Implement `config.py`**
 
-`src/anycam/config.py`:
+`src/anycam2rtsp/config.py`:
 
 ```python
 from __future__ import annotations
@@ -344,7 +344,7 @@ client:
 - [ ] **Step 8: Commit**
 
 ```bash
-git add pyproject.toml config.example.yaml src/anycam tests
+git add pyproject.toml config.example.yaml src/anycam2rtsp tests
 git commit -m "feat: project scaffolding, Frame, and config loading"
 ```
 
@@ -353,7 +353,7 @@ git commit -m "feat: project scaffolding, Frame, and config loading"
 ### Task 2: Windows host discovery
 
 **Files:**
-- Create: `src/anycam/host.py`
+- Create: `src/anycam2rtsp/host.py`
 - Test: `tests/test_host.py`
 
 **Interfaces:**
@@ -369,7 +369,7 @@ pure function so it can be tested without touching the live system.
 
 ```python
 import pytest
-from anycam.host import parse_default_gateway, HostDiscoveryError
+from anycam2rtsp.host import parse_default_gateway, HostDiscoveryError
 
 REAL = "default via 172.30.64.1 dev eth0 proto kernel \n"
 
@@ -397,11 +397,11 @@ def test_raises_on_empty_output():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_host.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'anycam.host'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'anycam2rtsp.host'`
 
 - [ ] **Step 3: Implement**
 
-`src/anycam/host.py`:
+`src/anycam2rtsp/host.py`:
 
 ```python
 from __future__ import annotations
@@ -445,7 +445,7 @@ Expected: PASS (4 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/anycam/host.py tests/test_host.py
+git add src/anycam2rtsp/host.py tests/test_host.py
 git commit -m "feat: discover Windows host from WSL default route"
 ```
 
@@ -454,7 +454,7 @@ git commit -m "feat: discover Windows host from WSL default route"
 ### Task 3: Freshness buffer
 
 **Files:**
-- Create: `src/anycam/freshness.py`
+- Create: `src/anycam2rtsp/freshness.py`
 - Test: `tests/test_freshness.py`
 
 **Interfaces:**
@@ -471,8 +471,8 @@ the newest frame without consuming it; `take()` returns it and clears the slot.
 ```python
 import threading
 
-from anycam.frame import Frame
-from anycam.freshness import LatestFrameBuffer
+from anycam2rtsp.frame import Frame
+from anycam2rtsp.freshness import LatestFrameBuffer
 
 
 def frame(n):
@@ -549,11 +549,11 @@ def test_producer_outrunning_consumer_always_yields_newest():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_freshness.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'anycam.freshness'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'anycam2rtsp.freshness'`
 
 - [ ] **Step 3: Implement**
 
-`src/anycam/freshness.py`:
+`src/anycam2rtsp/freshness.py`:
 
 ```python
 from __future__ import annotations
@@ -620,7 +620,7 @@ Expected: PASS (7 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/anycam/freshness.py tests/test_freshness.py
+git add src/anycam2rtsp/freshness.py tests/test_freshness.py
 git commit -m "feat: newest-frame-wins buffer with drop accounting"
 ```
 
@@ -629,8 +629,8 @@ git commit -m "feat: newest-frame-wins buffer with drop accounting"
 ### Task 4: Backoff and watchdog
 
 **Files:**
-- Create: `src/anycam/backoff.py`
-- Create: `src/anycam/watchdog.py`
+- Create: `src/anycam2rtsp/backoff.py`
+- Create: `src/anycam2rtsp/watchdog.py`
 - Test: `tests/test_backoff.py`
 - Test: `tests/test_watchdog.py`
 
@@ -646,8 +646,8 @@ sleeps is slow and flaky and tells you less than a fake clock does.
 `tests/test_backoff.py`:
 
 ```python
-from anycam.backoff import Backoff
-from anycam.config import BackoffConfig
+from anycam2rtsp.backoff import Backoff
+from anycam2rtsp.config import BackoffConfig
 
 CFG = BackoffConfig(initial_s=0.2, factor=2.0, max_s=5.0)
 
@@ -684,7 +684,7 @@ def test_attempts_counts_delays_since_reset():
 `tests/test_watchdog.py`:
 
 ```python
-from anycam.watchdog import Watchdog
+from anycam2rtsp.watchdog import Watchdog
 
 
 class FakeClock:
@@ -742,11 +742,11 @@ def test_a_wedged_stream_expires_even_though_nothing_raised():
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_backoff.py tests/test_watchdog.py -v`
-Expected: FAIL — `ModuleNotFoundError` for `anycam.backoff` and `anycam.watchdog`
+Expected: FAIL — `ModuleNotFoundError` for `anycam2rtsp.backoff` and `anycam2rtsp.watchdog`
 
 - [ ] **Step 4: Implement backoff**
 
-`src/anycam/backoff.py`:
+`src/anycam2rtsp/backoff.py`:
 
 ```python
 from __future__ import annotations
@@ -776,7 +776,7 @@ class Backoff:
 
 - [ ] **Step 5: Implement watchdog**
 
-`src/anycam/watchdog.py`:
+`src/anycam2rtsp/watchdog.py`:
 
 ```python
 from __future__ import annotations
@@ -817,7 +817,7 @@ Expected: PASS (9 tests)
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/anycam/backoff.py src/anycam/watchdog.py tests/test_backoff.py tests/test_watchdog.py
+git add src/anycam2rtsp/backoff.py src/anycam2rtsp/watchdog.py tests/test_backoff.py tests/test_watchdog.py
 git commit -m "feat: reconnect backoff and stream watchdog"
 ```
 
@@ -826,7 +826,7 @@ git commit -m "feat: reconnect backoff and stream watchdog"
 ### Task 5: ffmpeg capture command builder
 
 **Files:**
-- Create: `src/anycam/ffmpeg_cmd.py`
+- Create: `src/anycam2rtsp/ffmpeg_cmd.py`
 - Test: `tests/test_ffmpeg_cmd.py`
 
 **Interfaces:**
@@ -844,8 +844,8 @@ documented fallback for ffmpeg builds lacking `mjpeg_cuvid`.
 ```python
 import pytest
 
-from anycam.config import CameraConfig, EncodeConfig, SourceConfig, VideoConfig
-from anycam.ffmpeg_cmd import build_capture_command, command_string
+from anycam2rtsp.config import CameraConfig, EncodeConfig, SourceConfig, VideoConfig
+from anycam2rtsp.ffmpeg_cmd import build_capture_command, command_string
 
 
 def dshow_cam(**encode):
@@ -951,11 +951,11 @@ def test_command_string_quotes_device_names_containing_spaces():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_ffmpeg_cmd.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'anycam.ffmpeg_cmd'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'anycam2rtsp.ffmpeg_cmd'`
 
 - [ ] **Step 3: Implement**
 
-`src/anycam/ffmpeg_cmd.py`:
+`src/anycam2rtsp/ffmpeg_cmd.py`:
 
 ```python
 from __future__ import annotations
@@ -1012,7 +1012,7 @@ Expected: PASS (10 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/anycam/ffmpeg_cmd.py tests/test_ffmpeg_cmd.py
+git add src/anycam2rtsp/ffmpeg_cmd.py tests/test_ffmpeg_cmd.py
 git commit -m "feat: build ffmpeg capture commands for dshow and lavfi sources"
 ```
 
@@ -1021,7 +1021,7 @@ git commit -m "feat: build ffmpeg capture commands for dshow and lavfi sources"
 ### Task 6: MediaMTX configuration generation
 
 **Files:**
-- Create: `src/anycam/mediamtx.py`
+- Create: `src/anycam2rtsp/mediamtx.py`
 - Test: `tests/test_mediamtx.py`
 
 **Interfaces:**
@@ -1039,9 +1039,9 @@ that camera's ffmpeg command, with `runOnInitRestart` turning "ffmpeg died" into
 ```python
 import yaml
 
-from anycam.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
+from anycam2rtsp.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
                            ServerConfig, SourceConfig, VideoConfig)
-from anycam.mediamtx import render_mediamtx_config
+from anycam2rtsp.mediamtx import render_mediamtx_config
 
 
 def app_config(n=2):
@@ -1088,11 +1088,11 @@ def test_software_fallback_propagates_to_generated_commands():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_mediamtx.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'anycam.mediamtx'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'anycam2rtsp.mediamtx'`
 
 - [ ] **Step 3: Implement**
 
-`src/anycam/mediamtx.py`:
+`src/anycam2rtsp/mediamtx.py`:
 
 ```python
 from __future__ import annotations
@@ -1148,7 +1148,7 @@ Expected: PASS (5 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/anycam/mediamtx.py tests/test_mediamtx.py
+git add src/anycam2rtsp/mediamtx.py tests/test_mediamtx.py
 git commit -m "feat: generate MediaMTX config with per-camera ffmpeg supervision"
 ```
 
@@ -1157,7 +1157,7 @@ git commit -m "feat: generate MediaMTX config with per-camera ffmpeg supervision
 ### Task 7: RTSP receiver with reconnect
 
 **Files:**
-- Create: `src/anycam/receiver.py`
+- Create: `src/anycam2rtsp/receiver.py`
 - Test: `tests/test_receiver.py`
 
 **Interfaces:**
@@ -1175,8 +1175,8 @@ tested without a network, a server, or a camera.
 import threading
 import time
 
-from anycam.config import ClientConfig
-from anycam.receiver import LOW_LATENCY_OPTIONS, CameraReceiver
+from anycam2rtsp.config import ClientConfig
+from anycam2rtsp.receiver import LOW_LATENCY_OPTIONS, CameraReceiver
 
 
 class FakeVideoFrame:
@@ -1345,11 +1345,11 @@ def test_stop_terminates_the_thread():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_receiver.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'anycam.receiver'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'anycam2rtsp.receiver'`
 
 - [ ] **Step 3: Implement**
 
-`src/anycam/receiver.py`:
+`src/anycam2rtsp/receiver.py`:
 
 ```python
 from __future__ import annotations
@@ -1501,7 +1501,7 @@ Append to `tests/test_receiver.py`:
 ```python
 from fractions import Fraction
 
-from anycam.receiver import estimate_capture_ns
+from anycam2rtsp.receiver import estimate_capture_ns
 
 
 def test_estimate_uses_sender_start_time_and_pts():
@@ -1559,7 +1559,7 @@ Expected: FAIL — `ImportError: cannot import name 'estimate_capture_ns'`
 
 - [ ] **Step 7: Implement the sender-clock estimate**
 
-Add to `src/anycam/receiver.py`:
+Add to `src/anycam2rtsp/receiver.py`:
 
 ```python
 def estimate_capture_ns(start_time_realtime: int | None, pts: int | None,
@@ -1621,7 +1621,7 @@ Expected: PASS (15 tests)
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/anycam/receiver.py tests/test_receiver.py
+git add src/anycam2rtsp/receiver.py tests/test_receiver.py
 git commit -m "feat: RTSP receiver with low-latency options, reconnect and capture estimate"
 ```
 
@@ -1630,8 +1630,8 @@ git commit -m "feat: RTSP receiver with low-latency options, reconnect and captu
 ### Task 8: Multi-camera client and isolation
 
 **Files:**
-- Create: `src/anycam/stats.py`
-- Create: `src/anycam/client.py`
+- Create: `src/anycam2rtsp/stats.py`
+- Create: `src/anycam2rtsp/client.py`
 - Test: `tests/test_stats.py`
 - Test: `tests/test_client.py`
 
@@ -1647,7 +1647,7 @@ watchdog must be able to act on a receiver blocked inside a read.
 `tests/test_stats.py`:
 
 ```python
-from anycam.stats import StreamStats
+from anycam2rtsp.stats import StreamStats
 
 
 def test_format_line_includes_the_silent_failure_signals():
@@ -1682,9 +1682,9 @@ def test_healthy_stream_is_not_stalled():
 import threading
 import time
 
-from anycam.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
+from anycam2rtsp.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
                            ServerConfig, SourceConfig, VideoConfig)
-from anycam.client import MultiCameraClient
+from anycam2rtsp.client import MultiCameraClient
 
 
 def app_config(n=3):
@@ -1830,11 +1830,11 @@ def test_stop_is_idempotent():
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_stats.py tests/test_client.py -v`
-Expected: FAIL — `ModuleNotFoundError` for `anycam.stats` and `anycam.client`
+Expected: FAIL — `ModuleNotFoundError` for `anycam2rtsp.stats` and `anycam2rtsp.client`
 
 - [ ] **Step 4: Implement stats**
 
-`src/anycam/stats.py`:
+`src/anycam2rtsp/stats.py`:
 
 ```python
 from __future__ import annotations
@@ -1868,7 +1868,7 @@ class StreamStats:
 
 - [ ] **Step 5: Implement the client**
 
-`src/anycam/client.py`:
+`src/anycam2rtsp/client.py`:
 
 ```python
 from __future__ import annotations
@@ -1986,7 +1986,7 @@ Expected: PASS, ~60 tests, under 30 seconds
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/anycam/stats.py src/anycam/client.py tests/test_stats.py tests/test_client.py
+git add src/anycam2rtsp/stats.py src/anycam2rtsp/client.py tests/test_stats.py tests/test_client.py
 git commit -m "feat: multi-camera client with per-camera isolation and watchdog monitor"
 ```
 
@@ -1995,7 +1995,7 @@ git commit -m "feat: multi-camera client with per-camera isolation and watchdog 
 ### Task 9: Command-line interface
 
 **Files:**
-- Create: `src/anycam/cli.py`
+- Create: `src/anycam2rtsp/cli.py`
 - Test: `tests/test_cli.py`
 
 **Interfaces:**
@@ -2013,7 +2013,7 @@ non-zero exit code is expected and must not be reported as failure.
 ```python
 import yaml
 
-from anycam.cli import main
+from anycam2rtsp.cli import main
 
 CONFIG = """
 server: {rtsp_port: 8554}
@@ -2066,11 +2066,11 @@ def test_missing_config_file_reports_error(tmp_path, capsys):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_cli.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'anycam.cli'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'anycam2rtsp.cli'`
 
 - [ ] **Step 3: Implement**
 
-`src/anycam/cli.py`:
+`src/anycam2rtsp/cli.py`:
 
 ```python
 from __future__ import annotations
@@ -2128,7 +2128,7 @@ def _devices(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="anycam")
+    parser = argparse.ArgumentParser(prog="anycam2rtsp")
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -2170,7 +2170,7 @@ Expected: PASS (4 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/anycam/cli.py tests/test_cli.py
+git add src/anycam2rtsp/cli.py tests/test_cli.py
 git commit -m "feat: CLI for config generation, stream watching and device listing"
 ```
 
@@ -2205,9 +2205,9 @@ import time
 
 import pytest
 
-from anycam.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
+from anycam2rtsp.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
                            ServerConfig, SourceConfig, VideoConfig)
-from anycam.mediamtx import write_mediamtx_config
+from anycam2rtsp.mediamtx import write_mediamtx_config
 
 
 def free_port():
@@ -2277,7 +2277,7 @@ import time
 
 import pytest
 
-from anycam.client import MultiCameraClient
+from anycam2rtsp.client import MultiCameraClient
 
 pytestmark = pytest.mark.integration
 
@@ -2401,9 +2401,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from anycam.client import MultiCameraClient          # noqa: E402
-from anycam.config import load_config                # noqa: E402
-from anycam.host import discover_windows_host        # noqa: E402
+from anycam2rtsp.client import MultiCameraClient          # noqa: E402
+from anycam2rtsp.config import load_config                # noqa: E402
+from anycam2rtsp.host import discover_windows_host        # noqa: E402
 
 
 def display() -> int:
@@ -2492,12 +2492,12 @@ No protocol choice fixes it.
 - [ ] In Device Manager, View → Devices by connection; confirm which root hub
       each camera sits under
 - [ ] Spread cameras across controllers where possible; prefer USB 3.0 ports
-- [ ] Run all cameras for 10 minutes and confirm `anycam watch` shows a stable
+- [ ] Run all cameras for 10 minutes and confirm `anycam2rtsp watch` shows a stable
       frame rate on every one
 
 ## 2. DirectShow enumeration
 
-- [ ] `anycam devices` lists every camera
+- [ ] `anycam2rtsp devices` lists every camera
 - [ ] Note that ffmpeg exits non-zero here **by design** and prints to stderr;
       this is not a failure
 - [ ] Check for duplicate device names — two identical cameras report the same
@@ -2543,7 +2543,7 @@ No protocol choice fixes it.
 `README.md`:
 
 ```markdown
-# anycam-to-rtsp
+# anycam2rtsp
 
 Streams Windows USB cameras into WSL2 for real-time computer vision, keeping
 drivers on Windows and always delivering the freshest available frame.
@@ -2566,21 +2566,21 @@ lower frame rate, never growing latency.
 **Windows** — install [ffmpeg](https://ffmpeg.org/download.html) and
 [MediaMTX](https://github.com/bluenviron/mediamtx/releases), then:
 
-    anycam devices                      # find your camera names
-    anycam serve-config -c config.yaml  # writes mediamtx.yml
+    anycam2rtsp devices                      # find your camera names
+    anycam2rtsp serve-config -c config.yaml  # writes mediamtx.yml
     mediamtx.exe mediamtx.yml
 
 **WSL**:
 
     pip install -e ".[dev]"
-    anycam watch -c config.yaml
+    anycam2rtsp watch -c config.yaml
 
 ## Usage
 
 ```python
-from anycam.client import MultiCameraClient
-from anycam.config import load_config
-from anycam.host import discover_windows_host
+from anycam2rtsp.client import MultiCameraClient
+from anycam2rtsp.config import load_config
+from anycam2rtsp.host import discover_windows_host
 
 config = load_config("config.yaml")
 with MultiCameraClient(config, discover_windows_host()) as client:
@@ -2599,7 +2599,7 @@ Hardware verification is documented in [docs/bench-checklist.md](docs/bench-chec
 
 ## Design
 
-See [the design spec](docs/superpowers/specs/2026-09-14-anycam-to-rtsp-design.md)
+See [the design spec](docs/superpowers/specs/2026-09-14-anycam2rtsp-design.md)
 for why H.264 rather than MJPEG, why the watchdog is not redundant with
 reconnect, and why latency is measured out of band.
 ```
@@ -2624,8 +2624,8 @@ Before declaring the work complete:
 
 - [ ] `.venv/bin/pytest tests -m "not integration" -v` passes with no skips
 - [ ] `.venv/bin/pytest tests -m integration -v` passes with ffmpeg and mediamtx installed
-- [ ] `anycam serve-config` produces a `mediamtx.yml` that MediaMTX accepts
-- [ ] `anycam watch` shows a stable frame rate on every camera
+- [ ] `anycam2rtsp serve-config` produces a `mediamtx.yml` that MediaMTX accepts
+- [ ] `anycam2rtsp watch` shows a stable frame rate on every camera
 - [ ] Unplugging one camera leaves the others unaffected
 - [ ] The bench checklist in `docs/bench-checklist.md` has been worked through
 - [ ] Measured latency is consistent with the spec's budget

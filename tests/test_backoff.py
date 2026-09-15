@@ -1,5 +1,5 @@
-from anycam.backoff import Backoff
-from anycam.config import BackoffConfig
+from anycam2rtsp.backoff import Backoff
+from anycam2rtsp.config import BackoffConfig
 
 CFG = BackoffConfig(initial_s=0.2, factor=2.0, max_s=5.0)
 

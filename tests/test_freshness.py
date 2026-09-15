@@ -1,8 +1,8 @@
 import threading
 import time
 
-from anycam.frame import Frame
-from anycam.freshness import LatestFrameBuffer
+from anycam2rtsp.frame import Frame
+from anycam2rtsp.freshness import LatestFrameBuffer
 
 
 def frame(n):

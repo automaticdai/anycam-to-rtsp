@@ -1,4 +1,4 @@
-# anycam-to-rtsp
+# anycam2rtsp
 
 Streams Windows USB cameras into WSL2 for real-time computer vision, keeping
 drivers on Windows and always delivering the freshest available frame.
@@ -29,7 +29,7 @@ Everything that runs on the camera machine lives in
 [`windows/bundle/`](windows/bundle/) and ships verbatim. Build a portable
 archive with:
 
-    ./windows/build-zip.sh        # -> dist/anycam-windows.zip
+    ./windows/build-zip.sh        # -> dist/anycam2rtsp-windows.zip
 
 Copy it to the Windows machine, unzip, open PowerShell in that folder, and:
 
@@ -62,7 +62,7 @@ No `sudo` required:
       | tar -xz -C ~/.local/bin mediamtx
 
     pip install -e ".[dev]"
-    anycam watch -c config.yaml
+    anycam2rtsp watch -c config.yaml
 
 `config.yaml` needs the same `rtsp_port` and camera ids as the Windows side;
 copy it across. The consumer ignores `source` and `encode` — those describe
@@ -86,9 +86,9 @@ hardcode it: WSL's address changes across restarts.
 ## Usage
 
 ```python
-from anycam.client import MultiCameraClient
-from anycam.config import load_config
-from anycam.host import discover_windows_host
+from anycam2rtsp.client import MultiCameraClient
+from anycam2rtsp.config import load_config
+from anycam2rtsp.host import discover_windows_host
 
 config = load_config("config.yaml")
 with MultiCameraClient(config, discover_windows_host()) as client:
@@ -165,6 +165,6 @@ work — see the checklist.
 
 ## Design
 
-See [the design spec](docs/superpowers/specs/2026-09-14-anycam-to-rtsp-design.md)
+See [the design spec](docs/superpowers/specs/2026-09-14-anycam2rtsp-design.md)
 for why H.264 rather than MJPEG, why a wedged camera needs both a read timeout
 and a watchdog, and why latency is measured out of band.

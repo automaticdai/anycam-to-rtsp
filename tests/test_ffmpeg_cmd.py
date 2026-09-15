@@ -1,7 +1,7 @@
 import pytest
 
-from anycam.config import CameraConfig, EncodeConfig, SourceConfig, VideoConfig
-from anycam.ffmpeg_cmd import build_capture_command, command_string
+from anycam2rtsp.config import CameraConfig, EncodeConfig, SourceConfig, VideoConfig
+from anycam2rtsp.ffmpeg_cmd import build_capture_command, command_string
 
 
 def dshow_cam(**encode):

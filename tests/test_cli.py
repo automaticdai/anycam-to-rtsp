@@ -1,6 +1,6 @@
 import yaml
 
-from anycam.cli import main
+from anycam2rtsp.cli import main
 
 CONFIG = """
 server: {rtsp_port: 8554}
@@ -95,7 +95,7 @@ def test_serve_config_creates_output_directory(tmp_path):
 
 
 def test_module_invocation_runs_main_and_propagates_exit_code(tmp_path):
-    """`python -m anycam.cli` must actually run, not silently no-op.
+    """`python -m anycam2rtsp.cli` must actually run, not silently no-op.
 
     Without a __main__ guard the module is imported, defines its functions and
     exits 0 regardless of arguments — so a failing config would look like a
@@ -109,7 +109,7 @@ def test_module_invocation_runs_main_and_propagates_exit_code(tmp_path):
     cfg.write_text("cameras: []\n")
 
     proc = subprocess.run(
-        [sys.executable, "-m", "anycam.cli", "serve-config",
+        [sys.executable, "-m", "anycam2rtsp.cli", "serve-config",
          "-c", str(cfg), "-o", str(tmp_path / "m.yml")],
         capture_output=True, text=True)
 

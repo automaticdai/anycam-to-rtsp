@@ -13,12 +13,12 @@ No protocol choice fixes it.
 - [ ] In Device Manager, View → Devices by connection; confirm which root hub
       each camera sits under
 - [ ] Spread cameras across controllers where possible; prefer USB 3.0 ports
-- [ ] Run all cameras for 10 minutes and confirm `anycam watch` shows a stable
+- [ ] Run all cameras for 10 minutes and confirm `anycam2rtsp watch` shows a stable
       frame rate on every one
 
 ## 2. DirectShow enumeration
 
-- [ ] `anycam devices` lists every camera
+- [ ] `anycam2rtsp devices` lists every camera
 - [ ] Note that ffmpeg prints the list to **stderr**, and may exit zero or
       non-zero depending on the build (measured: ffmpeg 7.x exits 0, older
       builds exit 1). Neither is a failure

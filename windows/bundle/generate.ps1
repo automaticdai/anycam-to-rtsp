@@ -37,7 +37,7 @@ if (-not (Test-Path $configPath)) {
     exit 1
 }
 
-$cliArgs = @('-m', 'anycam.cli', 'serve-config', '-c', $configPath, '-o', $outputPath)
+$cliArgs = @('-m', 'anycam2rtsp.cli', 'serve-config', '-c', $configPath, '-o', $outputPath)
 if ($NoHwMjpeg) { $cliArgs += '--no-hw-mjpeg' }
 
 & $VenvPython @cliArgs

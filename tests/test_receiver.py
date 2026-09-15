@@ -2,8 +2,8 @@ import logging
 import threading
 import time
 
-from anycam.config import ClientConfig
-from anycam.receiver import (LOW_LATENCY_OPTIONS, OPEN_TIMEOUT_S,
+from anycam2rtsp.config import ClientConfig
+from anycam2rtsp.receiver import (LOW_LATENCY_OPTIONS, OPEN_TIMEOUT_S,
                              READ_TIMEOUT_S, CameraReceiver, default_opener)
 
 
@@ -245,7 +245,7 @@ def test_stop_terminates_the_thread():
 
 from fractions import Fraction
 
-from anycam.receiver import estimate_capture_ns
+from anycam2rtsp.receiver import estimate_capture_ns
 
 
 def test_estimate_uses_sender_start_time_and_pts():
@@ -312,7 +312,7 @@ def test_stop_reports_false_and_warns_when_the_thread_will_not_die(caplog):
     rx.start()
     wait_for(lambda: rx.is_alive())
     try:
-        with caplog.at_level(logging.WARNING, logger="anycam.receiver"):
+        with caplog.at_level(logging.WARNING, logger="anycam2rtsp.receiver"):
             stopped = rx.stop(timeout=0.1)
         assert stopped is False
         assert rx.is_alive()

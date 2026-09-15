@@ -1,8 +1,8 @@
 import yaml
 
-from anycam.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
+from anycam2rtsp.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
                            ServerConfig, SourceConfig, VideoConfig)
-from anycam.mediamtx import render_mediamtx_config
+from anycam2rtsp.mediamtx import render_mediamtx_config
 
 
 def app_config(n=2):

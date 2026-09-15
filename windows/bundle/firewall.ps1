@@ -41,7 +41,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     exit 1
 }
 
-$name = "anycam-to-rtsp RTSP $Port (WSL)"
+$name = "anycam2rtsp RTSP $Port (WSL)"
 
 if ($Remove) {
     $existing = Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue

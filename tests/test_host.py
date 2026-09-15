@@ -1,5 +1,5 @@
 import pytest
-from anycam.host import parse_default_gateway, HostDiscoveryError
+from anycam2rtsp.host import parse_default_gateway, HostDiscoveryError
 
 REAL = "default via 172.30.64.1 dev eth0 proto kernel \n"
 

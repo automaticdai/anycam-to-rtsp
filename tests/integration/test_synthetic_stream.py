@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from anycam.client import MultiCameraClient
+from anycam2rtsp.client import MultiCameraClient
 
 from .conftest import _start_mediamtx, _terminate
 

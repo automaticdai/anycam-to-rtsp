@@ -1,9 +1,9 @@
 import logging
 import time
 
-from anycam.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
+from anycam2rtsp.config import (AppConfig, CameraConfig, ClientConfig, EncodeConfig,
                            ServerConfig, SourceConfig, VideoConfig)
-from anycam.client import MultiCameraClient
+from anycam2rtsp.client import MultiCameraClient
 
 
 def app_config(n=3):
@@ -294,7 +294,7 @@ def test_monitor_survives_a_per_camera_exception(caplog):
 
         broken.watchdog.expired = boom
 
-        with caplog.at_level(logging.WARNING, logger="anycam.client"):
+        with caplog.at_level(logging.WARNING, logger="anycam2rtsp.client"):
             # cam1 must still get force-reconnected despite cam0 raising on
             # every single monitor tick.
             assert wait_for(lambda: client.stats()["cam1"].reconnects >= 1,
