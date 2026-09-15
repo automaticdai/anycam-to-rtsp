@@ -35,7 +35,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-. (Join-Path $Root 'lib.ps1')
+. (Join-Path $Root 'lib\common.ps1')
 
 $VenvPython = Join-Path $Root '.venv\Scripts\python.exe'
 $ConfigPath = Join-Path $Root 'config.yaml'
@@ -70,7 +70,7 @@ if ($NoProbe) {
 } else {
     Write-Step 'Checking which MJPEG decoder your cameras accept'
     $ffmpeg = Resolve-Ffmpeg -Root $Root
-    $listing = & $VenvPython (Join-Path $Root 'list_cameras.py') $ConfigPath
+    $listing = & $VenvPython (Join-Path $Root 'lib\list_cameras.py') $ConfigPath
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     $probed = $false

@@ -77,12 +77,18 @@ Nothing is installed system-wide. Everything lands inside this folder.
 
 | Script | Does |
 |---|---|
+| `.\run.ps1` | All of the below, in order, skipping what is already done |
 | `.\setup.ps1` | venv, package, ffmpeg + MediaMTX into `bin\` |
 | `.\devices.ps1` | List DirectShow cameras (`-Raw` for ffmpeg's full output) |
 | `.\configure.ps1` | Write `config.yaml` from detected cameras (`-Choose` to pick) |
 | `.\generate.ps1` | Build `mediamtx.yml` (`-NoHwMjpeg` for CPU MJPEG decode) |
 | `.\start.ps1` | Run the server |
 | `.\firewall.ps1` | Allow inbound TCP 8554 (needs administrator) |
+
+`lib\` holds internals the scripts share, not commands to run: `common.ps1`
+(native-command helpers) and `list_cameras.py` (reads `config.yaml` via the
+bundled package). `src\` is that package; `bin\` is where setup puts ffmpeg
+and MediaMTX.
 
 Edit `config.yaml` by hand whenever you like — change resolution, frame rate,
 bitrate, or camera ids. Re-run `.\generate.ps1` afterwards. **Do not hand-edit

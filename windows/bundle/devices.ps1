@@ -28,7 +28,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-. (Join-Path $Root 'lib.ps1')
+. (Join-Path $Root 'lib\common.ps1')
 
 $ffmpeg = Resolve-Ffmpeg -Root $Root
 

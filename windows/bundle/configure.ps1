@@ -28,7 +28,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-. (Join-Path $Root 'lib.ps1')
+. (Join-Path $Root 'lib\common.ps1')
 
 $outPath = if ([System.IO.Path]::IsPathRooted($Output)) { $Output } else { Join-Path $Root $Output }
 if ((Test-Path $outPath) -and -not $Force) {

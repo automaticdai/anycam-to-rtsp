@@ -25,8 +25,9 @@ possible optimisation, not something this code does today.
 
 ## Windows side
 
-Everything that runs on the camera machine is packaged in [`windows/`](windows/).
-Build a portable bundle with:
+Everything that runs on the camera machine lives in
+[`windows/bundle/`](windows/bundle/) and ships verbatim. Build a portable
+archive with:
 
     ./windows/build-zip.sh        # -> dist/anycam-windows.zip
 
@@ -44,7 +45,7 @@ Check a camera from a browser **on that machine**: <http://localhost:8889/cam0>.
 If the picture is there, capture and encoding work, and anything failing in WSL
 is networking.
 
-See [windows/README-WINDOWS.md](windows/README-WINDOWS.md) for the individual
+See [windows/bundle/README.md](windows/bundle/README.md) for the individual
 scripts, the firewall and mirrored-networking notes, and troubleshooting —
 including `CUDA_ERROR_NO_DEVICE`, which can appear on a machine with a perfectly
 healthy NVIDIA GPU.
