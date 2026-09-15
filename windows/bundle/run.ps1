@@ -93,8 +93,26 @@ if ($NoProbe) {
             }
             'busy' {
                 Write-Host "    $id : camera is in use by another application" -ForegroundColor Yellow
-                Write-Host "           Close whatever is holding it -- another MediaMTX, Teams, the Camera app." -ForegroundColor DarkGray
-                Write-Host "           Falling back to CPU decode, which always works." -ForegroundColor DarkGray
+                # Name the holder rather than guess at it. A stale ffmpeg from
+                # an interrupted earlier run is indistinguishable from Teams in
+                # ffmpeg's own error message, and telling someone to close
+                # Teams when the culprit is our own leftover wastes their time.
+                $holder = Get-CameraHolder
+                if ($holder) {
+                    Write-Host "           Held by: $holder" -ForegroundColor DarkGray
+                    if ($holder -like '*\bin\ffmpeg.exe') {
+                        Write-Host '           That is a leftover ffmpeg from an earlier run. Stop it with:' -ForegroundColor DarkGray
+                        Write-Host '               Get-Process ffmpeg -ErrorAction SilentlyContinue | Stop-Process -Force' -ForegroundColor DarkGray
+                    }
+                } else {
+                    Write-Host '           Close whatever is holding it -- another MediaMTX, Teams, the Camera app.' -ForegroundColor DarkGray
+                }
+                Write-Host '           Falling back to CPU decode, which always works.' -ForegroundColor DarkGray
+                $useHardwareDecode = $false
+            }
+            'timeout' {
+                Write-Host "    $id : camera did not deliver a frame in time; using CPU decode" -ForegroundColor Yellow
+                Write-Host '           The probe was stopped rather than left holding the camera.' -ForegroundColor DarkGray
                 $useHardwareDecode = $false
             }
             default {
